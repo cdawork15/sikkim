@@ -1,0 +1,8 @@
+# Each app keeps its own .gitignore; these apply everywhere.
+.DS_Store
+.env
+.env.*
+!.env.example
+!.env.test.example
+node_modules/
+*.log

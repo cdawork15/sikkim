@@ -1,8 +1,8 @@
 # Sikkim Experiences
 
-React 19 · TypeScript · Vite · React Router. A mobile-first web app for discovering and booking local experiences in Sikkim, plus host and admin workspaces. It talks to the [backend API](https://github.com/gauravyad86/sikkim-experiences-backend) under `/v1`.
+React 19 · TypeScript · Vite · React Router. A mobile-first web app for discovering and booking local experiences in Sikkim, plus host and admin workspaces. It talks to the [backend API](../backend) under `/v1`.
 
-- [System architecture and workflow diagrams](https://github.com/gauravyad86/sikkim-experiences-backend/blob/main/docs/ARCHITECTURE.md)
+- [System architecture and workflow diagrams](../docs/ARCHITECTURE.md)
 - [Design rules and media credits](docs/DEMO.md) · [Approved prototype](docs/design-references/)
 - [Remaining work](docs/planning/BACKLOG.md)
 

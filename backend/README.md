@@ -1,8 +1,8 @@
 # Sikkim Experiences backend
 
-Node 24 · TypeScript · Fastify 5 · PostgreSQL. The API behind the [Sikkim Experiences app](https://github.com/gauravyad86/sikkim-experiences): accounts, hosts, experiences, free bookings with QR tickets, media, Community, and an admin workspace with a curator CRM.
+Node 24 · TypeScript · Fastify 5 · PostgreSQL. The API behind the [Sikkim Experiences web app](../frontend): accounts, hosts, experiences, free bookings with QR tickets, media, Community, and an admin workspace with a curator CRM.
 
-- [Architecture and workflow diagrams](docs/ARCHITECTURE.md)
+- [Architecture and workflow diagrams](../docs/ARCHITECTURE.md)
 - [API guide](docs/API.md)
 - [Current team demo server](docs/DEPLOYMENT.md)
 
@@ -43,7 +43,7 @@ Optional local sample content (needs `ENABLE_DEMO_AUTH=true` and media settings)
 
 ```sh
 npm run db:preview
-npm run db:media-preview -- --from=../sikkim-experiences/public/videos
+npm run db:media-preview -- --from=../frontend/public/videos
 ```
 
 ### Sign in locally

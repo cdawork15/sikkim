@@ -1,13 +1,13 @@
 # Architecture and workflows
 
-Sikkim Experiences is two deployables: a React single-page app and a Fastify API backed by PostgreSQL. Diagrams use Mermaid, which GitHub renders.
+Sikkim Experiences is one repository with two deployables: a React single-page app (`frontend/`) and a Fastify API backed by PostgreSQL (`backend/`). Diagrams use Mermaid, which GitHub renders.
 
 ## System architecture
 
 ```mermaid
 flowchart LR
   subgraph Client["Phone or desktop browser"]
-    SPA["React 19 SPA<br/>(Vite build, sikkim-experiences)"]
+    SPA["React 19 SPA<br/>(Vite build, frontend/)"]
   end
 
   subgraph Edge["Static hosting + reverse proxy"]
@@ -15,7 +15,7 @@ flowchart LR
     Proxy["/v1 → API<br/>(HTTPS, nginx or CDN rewrite)"]
   end
 
-  subgraph API["Fastify API (Node 24, this repo)"]
+  subgraph API["Fastify API (Node 24, backend/)"]
     direction TB
     Core["app.ts<br/>helmet · CORS · rate limits<br/>schema validation · request IDs"]
     Accounts["accounts<br/>register · login · sessions · privacy"]

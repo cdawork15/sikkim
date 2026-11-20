@@ -1,8 +1,10 @@
 name: Backend checks
 on:
   pull_request:
+    paths: ["backend/**", ".github/workflows/backend.yml"]
   push:
     branches: [main]
+    paths: ["backend/**", ".github/workflows/backend.yml"]
 permissions:
   contents: read
   pull-requests: read
@@ -10,20 +12,24 @@ jobs:
   check:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
     env:
       NODE_ENV: test
       FRONTEND_ORIGINS: http://localhost:5173
       DATABASE_URL: postgresql://sikkim_app:ci-app-only@127.0.0.1:55439/sikkim_test
       MIGRATION_DATABASE_URL: postgresql://sikkim_owner:ci-owner-only@127.0.0.1:55439/sikkim_test
-      DB_TLS: 'false'
+      DB_TLS: "false"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '24'
+          node-version-file: .nvmrc
           cache: npm
+          cache-dependency-path: backend/package-lock.json
       - run: npm ci
       - name: Start native PostgreSQL
         run: |
@@ -38,7 +44,7 @@ jobs:
         run: npm run db:setup
         env:
           PGHOST: 127.0.0.1
-          PGPORT: '55439'
+          PGPORT: "55439"
           PGUSER: postgres
           PGPASSWORD: ci-admin-only
           DB_OWNER_PASSWORD: ci-owner-only
@@ -48,7 +54,7 @@ jobs:
       - run: npm audit --audit-level=high
       - uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
         env:
-          GITLEAKS_ENABLE_COMMENTS: 'false'
+          GITLEAKS_ENABLE_COMMENTS: "false"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Stop test database
         if: always()
