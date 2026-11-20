@@ -1,0 +1,40 @@
+{
+  "name": "sikkim-experiences",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "test": "node --no-experimental-webstorage node_modules/vitest/vitest.mjs run",
+    "test:e2e": "playwright test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:api": "playwright test --config playwright.api.config.ts"
+  },
+  "dependencies": {
+    "lucide-react": "0.468.0",
+    "qrcode": "^1.5.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-router-dom": "7.18.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.20.4",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "axe-core": "4.10.3",
+    "jsdom": "29.1.1",
+    "prettier": "3.9.8",
+    "typescript": "5.9.3",
+    "vite": "7.3.7",
+    "vitest": "4.1.12"
+  }
+}

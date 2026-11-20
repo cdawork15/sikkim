@@ -1,0 +1,49 @@
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url(/fonts/bricolage-0.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url(/fonts/bricolage-1.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  src: url(/fonts/bricolage-2.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Figtree';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url(/fonts/figtree-3.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Figtree';
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url(/fonts/figtree-4.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Figtree';
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+  src: url(/fonts/figtree-5.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Figtree';
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url(/fonts/figtree-6.woff2) format('woff2');
+}
