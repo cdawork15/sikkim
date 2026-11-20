@@ -1,0 +1,933 @@
+.api-shell {
+  min-height: 100vh;
+  background: var(--background, #080808);
+}
+.api-shell .interior-page {
+  padding-top: 48px;
+  padding-bottom: 48px;
+}
+.api-shell h1 {
+  font-size: clamp(2.4rem, 5vw, 4.4rem);
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+  margin: 18px 0 28px;
+}
+.api-shell h2 {
+  font-size: 1.5rem;
+  margin: 0 0 18px;
+}
+.api-shell h3 {
+  margin: 22px 0 12px;
+}
+.api-shell p {
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.api-shell button,
+.api-shell input,
+.api-shell select,
+.api-shell textarea {
+  font: inherit;
+}
+.api-shell :focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 4px;
+}
+.api-shell button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.api-shell .button {
+  min-height: 46px;
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+  border-radius: 999px;
+}
+.api-panel {
+  display: block;
+  padding: 26px;
+  background: #111;
+  border: 1px solid #292929;
+  border-radius: 20px;
+  margin: 24px 0;
+  min-width: 0;
+}
+.api-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+.api-form label {
+  display: grid;
+  gap: 9px;
+  color: #ddd;
+  min-width: 0;
+}
+.api-form input,
+.api-form select,
+.api-form textarea {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid #454545;
+  border-radius: 10px;
+  color: #fff;
+  background: #191919;
+  box-sizing: border-box;
+}
+.api-form textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+.api-form .api-check,
+.api-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+.api-check input {
+  width: 20px;
+  height: 20px;
+  min-height: auto;
+  accent-color: #e50914;
+  flex-shrink: 0;
+}
+.api-wide {
+  grid-column: 1 / -1;
+}
+.api-form fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.api-form legend,
+fieldset.api-form legend {
+  margin-bottom: 22px;
+  font-size: 1.4rem;
+  font-weight: 650;
+}
+fieldset.api-form {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.api-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 18px 0;
+}
+.api-form .api-actions {
+  margin: 0;
+}
+.api-notice,
+.api-session-notice {
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: #202020;
+  color: #ddd;
+  margin: 22px 0;
+}
+.api-notice p {
+  margin: 0 0 12px;
+}
+.api-notice small {
+  display: block;
+  overflow-wrap: anywhere;
+  margin: 8px 0;
+}
+.api-session-notice {
+  margin: 16px 5vw;
+}
+.api-empty {
+  padding: 50px 26px;
+  border: 1px solid #292929;
+  border-radius: 22px;
+  margin: 32px 0;
+  background: radial-gradient(ellipse at top left, #25201d, #111 75%);
+}
+.page.interior-page:has(> .account-gate) {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  margin: 0;
+}
+.api-shell:has(.account-gate) {
+  min-height: 0;
+}
+.account-gate {
+  width: 100%;
+  min-height: calc(100svh - 91px);
+  margin: 0;
+  background: #080808;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.account-gate-scene {
+  position: relative;
+  min-height: 100%;
+  isolation: isolate;
+  background: #20272a;
+}
+.account-gate-scene > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 45%;
+  z-index: -2;
+}
+.account-gate-scene::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent 75%, #080808),
+    linear-gradient(180deg, #0003, transparent 35%, #000c);
+  z-index: -1;
+}
+.account-gate-place {
+  position: absolute;
+  top: 32px;
+  left: clamp(24px, 4vw, 64px);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid #ffffff30;
+  border-radius: 999px;
+  background: #101516c9;
+  color: #fff;
+  font-size: 11px;
+}
+.account-gate-scene-copy {
+  position: absolute;
+  bottom: 88px;
+  left: clamp(24px, 4vw, 64px);
+  right: 24px;
+  color: #fff;
+}
+.account-gate-scene-copy > span {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2px;
+}
+.account-gate-scene-copy strong {
+  font-size: clamp(32px, 3.5vw, 50px);
+  font-weight: 600;
+  letter-spacing: -1px;
+  line-height: 1.1;
+}
+.account-gate-content {
+  width: 100%;
+  max-width: 640px;
+  justify-self: center;
+  padding: clamp(32px, 5vw, 80px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 24px;
+  min-width: 0;
+}
+.account-gate-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #aaa;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.8px;
+}
+.account-gate-eyebrow > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e50914;
+}
+.account-gate h1,
+.api-shell .account-gate h1 {
+  margin: 0;
+  max-width: 440px;
+  text-wrap: balance;
+  font-size: clamp(34px, 4vw, 48px);
+  font-weight: 650;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+}
+.account-gate p,
+.api-shell .account-gate p {
+  margin: 0;
+  max-width: 340px;
+  color: #b7b7b7;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.account-gate-perks {
+  display: grid;
+  gap: 12px;
+  padding-block: 4px;
+}
+.account-gate-perks > span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #ddd;
+  font-size: 12px;
+}
+.account-gate-perks svg {
+  color: #e7949e;
+}
+.account-gate-actions {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  max-width: 360px;
+  margin-top: 6px;
+}
+.account-gate-actions .button {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px 20px;
+  font-size: 14px;
+  border-radius: 999px;
+}
+.account-gate-browse {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  color: #ddd;
+  font-size: 13px;
+  border-radius: 999px;
+}
+.account-gate-browse:hover {
+  color: #fff;
+  background: #ffffff08;
+}
+.account-gate .account-gate-guest-note,
+.api-shell .account-gate .account-gate-guest-note {
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+  color: #999;
+  font-size: 11px;
+  margin-top: -12px;
+}
+@media (max-width: 680px) {
+  .account-gate {
+    grid-template-columns: 1fr;
+    grid-template-rows: clamp(160px, 28svh, 260px) auto;
+    min-height: calc(100svh - 140px - env(safe-area-inset-bottom));
+  }
+  .account-gate-scene {
+    min-height: 0;
+  }
+  .account-gate-scene::after {
+    background: linear-gradient(180deg, #0002, transparent 25%, #080808);
+  }
+  .account-gate-place {
+    top: 20px;
+    left: 24px;
+    padding: 6px 10px;
+    font-size: 10px;
+  }
+  .account-gate-scene-copy {
+    bottom: 42px;
+    left: 24px;
+  }
+  .account-gate-scene-copy > span {
+    display: none;
+  }
+  .account-gate-scene-copy strong {
+    font-size: 30px;
+  }
+  .account-gate-content {
+    padding: 24px 28px 32px;
+    gap: 16px;
+    max-width: 440px;
+  }
+  .account-gate-eyebrow {
+    font-size: 9px;
+  }
+  .account-gate h1,
+  .api-shell .account-gate h1 {
+    font-size: 34px;
+  }
+  .account-gate-perks {
+    gap: 10px;
+  }
+  .account-gate p,
+  .api-shell .account-gate p {
+    font-size: 13px;
+  }
+}
+@media (max-width: 680px) and (max-height: 740px) {
+  .account-gate {
+    grid-template-rows: 110px auto;
+  }
+  .account-gate-scene-copy,
+  .account-gate-perks {
+    display: none;
+  }
+  .account-gate-content {
+    padding: 16px 24px 24px;
+    gap: 10px;
+  }
+  .account-gate h1,
+  .api-shell .account-gate h1 {
+    font-size: 28px;
+  }
+  .account-gate p,
+  .api-shell .account-gate p {
+    font-size: 12px;
+  }
+}
+.api-muted {
+  color: #b3b3b3;
+  font-size: 0.94rem;
+}
+.api-narrow {
+  max-width: 900px;
+}
+.api-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+.api-grid > div {
+  min-width: 0;
+}
+.api-grid .api-panel {
+  margin: 0;
+  height: 100%;
+}
+.api-grid .experience-card {
+  width: 100%;
+  height: 100%;
+}
+.api-grid .card-body {
+  padding: 20px;
+}
+.api-more {
+  margin: 26px 0;
+}
+.api-artwork {
+  min-height: 200px;
+  aspect-ratio: 16/10;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(
+    ellipse at 70% 10%,
+    #51443c,
+    #26322f 50%,
+    #151e1c
+  );
+  color: #d4ddd7;
+  border-radius: 14px;
+}
+.api-artwork span {
+  font-size: 0.85rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.api-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 22px 0;
+}
+.api-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  border: 1px solid #454545;
+  border-radius: 999px;
+  padding: 10px 18px;
+  background: #191919;
+  color: white;
+}
+.api-chip:hover {
+  background: #292929;
+}
+.api-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 48px;
+  margin: 32px 0;
+}
+.api-detail > section {
+  min-width: 0;
+}
+.api-detail h1 {
+  margin-block: 12px 20px;
+  font-size: clamp(2rem, 3.2vw, 3.25rem);
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+.api-detail > section > .eyebrow {
+  margin-top: 0;
+}
+.api-detail .api-artwork {
+  min-height: 380px;
+}
+.api-shell details {
+  border-top: 1px solid #333;
+  padding: 18px 0;
+}
+.api-shell summary {
+  cursor: pointer;
+}
+.api-record {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin: 0;
+}
+.api-record dt {
+  color: #aaa;
+  margin-bottom: 8px;
+}
+.api-record dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.api-host h2,
+.api-host p {
+  overflow-wrap: anywhere;
+}
+.api-suggestions {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.api-suggestions a {
+  display: block;
+  padding: 12px;
+  border-bottom: 1px solid #333;
+}
+@media (max-width: 1000px) {
+  .api-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .api-detail {
+    gap: 24px;
+  }
+}
+@media (max-width: 680px) {
+  .api-shell .interior-page {
+    padding-top: 24px;
+  }
+  .api-shell .button {
+    min-height: 48px;
+    gap: 12px;
+    padding: 12px 18px;
+    line-height: 1.4;
+  }
+  .api-shell .api-form input,
+  .api-shell .api-form select,
+  .api-shell .api-form textarea {
+    font-size: 16px;
+  }
+  .api-actions,
+  .media-navigation {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .api-actions > .button,
+  .media-navigation > .button,
+  .api-panel > .button,
+  .api-form > .button {
+    width: 100%;
+  }
+  .api-check {
+    min-height: 44px;
+    margin-block: 6px;
+  }
+  .api-form {
+    gap: 20px;
+  }
+  .api-panel > p + .button {
+    margin-top: 16px;
+  }
+  .api-form,
+  .api-detail,
+  .api-record,
+  .api-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .api-panel {
+    padding: 20px;
+  }
+  .api-detail .api-artwork {
+    min-height: 230px;
+  }
+  .api-chips {
+    gap: 8px;
+  }
+  .api-chip {
+    padding: 9px 14px;
+  }
+}
+
+.api-preview-image {
+  position: relative;
+  aspect-ratio: 16/10;
+  overflow: hidden;
+  border-radius: 14px;
+}
+.api-preview-image img {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+}
+.api-detail .api-preview-image {
+  min-height: 340px;
+}
+@media (max-width: 600px) {
+  .api-detail .api-preview-image {
+    min-height: 230px;
+  }
+}
+/* The connected cards include API text below their artwork, unlike the compact demo overlays. */
+.api-shell main:focus {
+  outline: none;
+}
+.api-shell .experience-card {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  min-height: 0;
+  background: #131313;
+  border: 1px solid #292929;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.api-shell .experience-rail {
+  grid-auto-columns: 280px;
+  gap: 20px;
+  padding-bottom: 12px;
+}
+.api-shell .experience-rail .experience-card {
+  width: 280px;
+  height: auto;
+  aspect-ratio: auto;
+}
+.api-shell .experience-card .card-body {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 10px;
+  padding: 18px;
+  background: none;
+  pointer-events: auto;
+}
+.api-shell .experience-card .card-body h3 {
+  font-size: 20px;
+  line-height: 1.25;
+  margin: 0;
+}
+.api-shell .experience-card .card-location {
+  display: block;
+  font-size: 12px;
+  color: #b5b5b5;
+}
+.api-shell .experience-card .card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 12px;
+  margin-top: auto;
+  border: 0;
+}
+.api-shell .experience-card .card-bottom strong {
+  font-size: 16px;
+  font-weight: 600;
+}
+.api-shell .experience-card .card-bottom small {
+  font-size: 12px;
+  font-weight: 400;
+}
+.api-shell .experience-card .api-preview-image,
+.api-shell .experience-card .api-artwork {
+  border-radius: 0;
+  min-height: 175px;
+}
+@media (max-width: 600px) {
+  .api-shell .experience-rail {
+    grid-auto-columns: 260px;
+  }
+  .api-shell .experience-rail .experience-card {
+    width: 260px;
+  }
+}
+
+@media (max-width: 680px) {
+  .connected-shell .header-actions .guest-link {
+    display: flex;
+    padding: 0;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+  }
+  .connected-shell .guest-link > span:not(.guest-avatar),
+  .connected-shell .guest-link > svg {
+    display: none;
+  }
+}
+
+/* Explore keeps the approved compact browsing layout. Advanced controls are optional. */
+.api-shell .connected-browse .page-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.api-shell .connected-browse h1 {
+  font-size: clamp(28px, 3.2vw, 44px);
+  margin: 0 0 10px;
+  letter-spacing: -0.035em;
+}
+.connected-browse .page-heading p {
+  color: var(--color-muted);
+}
+.connected-browse .text-link {
+  white-space: nowrap;
+}
+.connected-browse .search-form {
+  margin-bottom: 22px;
+}
+.connected-browse .search-form input {
+  min-width: 0;
+}
+.connected-browse .category-nav {
+  margin-bottom: 24px;
+}
+.connected-browse .browse-toolbar {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.api-shell .browse-filters {
+  padding: 0;
+  border: 0;
+  flex: 1;
+  min-width: 0;
+}
+.browse-filters > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid #3a3a3a;
+  border-radius: 999px;
+  list-style: none;
+}
+.browse-filters > summary::-webkit-details-marker {
+  display: none;
+}
+.browse-filters[open] > summary svg {
+  transform: rotate(90deg);
+}
+.browse-filter-count {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #e50914;
+  font-size: 12px;
+}
+.browse-filter-panel {
+  padding: 24px;
+  margin-top: 14px;
+  background: #111;
+  border: 1px solid #292929;
+  border-radius: 18px;
+}
+.connected-browse .sort-control select {
+  min-height: 44px;
+  border-radius: 999px;
+}
+.api-shell .browse-saved {
+  padding: 12px 0 24px;
+  margin-bottom: 12px;
+  border: 0;
+  color: #bbb;
+}
+.browse-saved > summary {
+  width: fit-content;
+}
+.browse-suggestions {
+  border: 1px solid #333;
+  border-radius: 14px;
+  background: #151515;
+  margin-bottom: 20px;
+}
+@media (max-width: 680px) {
+  .api-shell .connected-browse .page-heading {
+    display: block;
+    margin-bottom: 20px;
+  }
+  .connected-browse .page-heading .text-link {
+    display: inline-flex;
+    margin-top: 12px;
+  }
+  .connected-browse .category-nav {
+    margin-bottom: 18px;
+  }
+  .connected-browse .browse-toolbar {
+    flex-wrap: wrap;
+    position: relative;
+    padding-top: 0;
+  }
+  .connected-browse .browse-filters[open] {
+    flex-basis: 100%;
+    padding-top: 0;
+  }
+  .connected-browse .browse-filters[open] + .sort-control {
+    position: absolute;
+    right: 0;
+    top: 0;
+  }
+  .browse-filter-panel {
+    padding: 18px;
+  }
+}
+
+.availability-page .api-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+.availability-page .api-empty > h1,
+.availability-page .api-empty > p {
+  margin: 0;
+}
+.availability-page .api-empty > .button {
+  margin-top: 8px;
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+}
+
+/* Password sign-in shares the full-page account layout. */
+.password-page .password-form {
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+.password-form label {
+  font-size: 14px;
+}
+.password-form label[for='account-password'] {
+  margin-bottom: -7px;
+}
+.password-input {
+  position: relative;
+}
+.password-input input {
+  padding-right: 72px;
+}
+.password-input button {
+  position: absolute;
+  right: 4px;
+  top: 2px;
+  min-width: 60px;
+  min-height: 44px;
+  color: #ddd;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.api-shell .password-page .password-note {
+  max-width: none;
+  font-size: 12px;
+  color: #aaa;
+}
+.password-switch button {
+  min-height: 44px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+.password-page .api-notice {
+  margin: 0;
+  width: 100%;
+}
+@media (max-width: 680px) {
+  .password-page .account-gate-scene {
+    min-height: 170px;
+  }
+  .password-page .account-gate-scene-copy {
+    display: none;
+  }
+  .password-page .account-gate-content {
+    padding-top: 24px;
+    gap: 18px;
+  }
+}
+
+/* One-time code sign-in (prototype S01/S02) */
+.otp-signin {
+  display: grid;
+  gap: 12px;
+}
+.otp-channel {
+  margin-bottom: 4px;
+}
+.otp-sent {
+  margin: 0;
+  color: var(--color-muted);
+}
+.otp-sent strong {
+  color: #fff;
+}
+.otp-profile h2 {
+  margin: 0;
+}
+.interest-pick {
+  flex-wrap: wrap;
+  padding-block: 4px;
+}
+.interest-pick button[aria-pressed='true'] {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+.password-switch button + button {
+  margin-left: 0;
+}
+.onboarding-page .otp-profile {
+  max-width: 560px;
+  margin: 24px auto;
+}

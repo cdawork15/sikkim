@@ -1,0 +1,24 @@
+Real Sikkim footage by Rajani Gairshail, via Wikimedia Commons.
+All three source videos, the local edited clips and extracted poster frames:
+Creative Commons Attribution-ShareAlike 4.0 International
+https://creativecommons.org/licenses/by-sa/4.0/
+
+nathu.mp4 / nathu.webp
+Mountain Landscape near Nathu La Pass, Sikkim (27 April 2026)
+https://commons.wikimedia.org/wiki/File:Mountain_Landscape_near_Nathu_La_Pass,_Sikkim.webm
+
+enchey.mp4 / enchey.webp
+Prayer flags at Enchey Monastery, Gangtok (13 May 2026)
+https://commons.wikimedia.org/wiki/File:Prayer_flags_at_Enchey_Monastery,_Gangtok.webm
+
+tsongmo.mp4 / tsongmo.webp
+Tsongmo Lake, Sikkim, 2026 (29 April 2026)
+https://commons.wikimedia.org/wiki/File:Tsongmo_Lake,_Sikkim,_2026.webm
+
+Changes: 0–8 seconds retained for Nathu La and Enchey; 10–18 seconds for
+Tsongmo Lake. Clips resized to 480 pixels wide, encoded as
+H.264/AAC at 24 fps with original audio; poster extracted at 1 second.
+English descriptive caption tracks added, also CC BY-SA 4.0.
+No AI-generated frames, synthetic audio or added music in these reel files.
+The footage shows the named places, not the fictional hosts or bookable routes.
+No endorsement by the author is implied.
