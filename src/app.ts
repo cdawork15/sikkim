@@ -5,6 +5,7 @@ import { registerExperienceActions } from './media/action-routes.js';
 import { registerCatalogue } from './catalogue/routes.js';
 import { registerBookings } from './bookings/routes.js';
 import { registerHosts } from './hosts/routes.js';
+import { registerAdmin } from './admin/routes.js';
 import { randomUUID } from 'node:crypto';
 import type { Writable } from 'node:stream';
 import Fastify from 'fastify';
@@ -217,6 +218,7 @@ export async function buildApp(
   registerExperienceActions(app, database, config);
   registerAccounts(app, database, config);
   registerHosts(app, database, config);
+  registerAdmin(app, database, config);
   registerCatalogue(app, database, config);
   registerBookings(app, database, config);
   registerCommunity(app, database, config);

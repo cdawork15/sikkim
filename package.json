@@ -21,7 +21,8 @@
     "db:reset": "node --env-file-if-exists=.env dist/bin/database.js reset",
     "db:setup": "node --env-file-if-exists=.env db/setup-local.mjs",
     "db:preview": "node --env-file-if-exists=.env dist/bin/database.js preview",
-    "db:media-preview": "node --env-file-if-exists=.env dist/bin/media-preview.js"
+    "db:media-preview": "node --env-file-if-exists=.env dist/bin/media-preview.js",
+    "admin": "node --env-file-if-exists=.env dist/bin/admin.js"
   },
   "dependencies": {
     "@fastify/cors": "11.4.1",

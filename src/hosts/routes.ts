@@ -2,7 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import type { Config } from '../config.js';
 import type { Database } from '../db/database.js';
 import { bearerToken } from '../accounts/model.js';
-import { hostService, type HostDraft, type Decision } from './service.js';
+import {
+  hostService,
+  verificationMethods,
+  type HostDraft,
+  type Decision,
+} from './service.js';
 const object = (
   properties: Record<string, unknown>,
   required: string[] = [],
@@ -120,6 +125,7 @@ export function registerHosts(
             },
             reason: text(1000),
             expiresAt: { type: 'string', format: 'date-time' },
+            method: { type: 'string', enum: verificationMethods },
           },
           ['revision', 'action', 'reason'],
         ),

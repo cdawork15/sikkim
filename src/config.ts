@@ -137,6 +137,15 @@ export function loadConfig(env: Environment = process.env) {
     }
     localDatabaseTarget(mode, connectionString);
   }
+  // 'manual': an admin checks a real host's identity (in person, video call or
+  // documents) and records the method when approving. 'disabled' keeps real
+  // host applications closed.
+  const hostVerification = env.HOST_VERIFICATION_MODE ?? 'disabled';
+  if (!['disabled', 'manual'].includes(hostVerification)) {
+    throw new ConfigurationError(
+      'HOST_VERIFICATION_MODE must be disabled or manual',
+    );
+  }
   const storageMode = env.MEDIA_STORAGE_MODE ?? 'local';
   if (!['local', 'single_server'].includes(storageMode)) {
     throw new ConfigurationError('Invalid MEDIA_STORAGE_MODE');
@@ -179,6 +188,7 @@ export function loadConfig(env: Environment = process.env) {
     requestsPerMinute: +requestLimit,
     mode,
     demoAuth,
+    hostVerification: hostVerification as 'disabled' | 'manual',
     production,
     connectionString,
     origins,

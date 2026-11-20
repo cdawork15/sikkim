@@ -14,6 +14,18 @@ test('configuration has bounded defaults and does not trust forwarded headers', 
   assert.equal(config.host, '127.0.0.1');
   assert.equal(config.databaseTls, false);
   assert.deepEqual(config.trustProxy, []);
+  assert.equal(config.hostVerification, 'disabled');
+});
+
+test('host verification mode is explicit', () => {
+  assert.equal(
+    loadConfig({ ...testEnvironment, HOST_VERIFICATION_MODE: 'manual' })
+      .hostVerification,
+    'manual',
+  );
+  assert.throws(() =>
+    loadConfig({ ...testEnvironment, HOST_VERIFICATION_MODE: 'auto' }),
+  );
 });
 
 for (const [field, value] of Object.entries({

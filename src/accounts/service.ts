@@ -478,7 +478,11 @@ export function accountService(database: Database, config: Config) {
     exportAccount: (token: string, requestId: string) =>
       authenticated(token, async (client, p) => {
         const user = await profile(client, p.userId);
-        const host = await hostAccountData(client, p.userId);
+        const host = await hostAccountData(
+          client,
+          p.userId,
+          config.hostVerification === 'manual',
+        );
         const catalogue = await catalogueAccountData(client, p.userId);
         const media = await mediaAccountData(client, p.userId);
         const bookings = await bookingAccountData(client, p.userId);

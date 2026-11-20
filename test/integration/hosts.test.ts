@@ -35,7 +35,7 @@ test('host onboarding and approval against isolated PostgreSQL', async (t) => {
   async function setup() {
     await owner.query(
       `
-        TRUNCATE public.community_photos, public.community_events, public.booking_changes, public.tickets, public.bookings,
+        TRUNCATE public.crm_lead_notes, public.crm_leads, public.community_photos, public.community_events, public.booking_changes, public.tickets, public.bookings,
         public.seat_holds, public.experience_slots, public.story_views,
         public.saved_items,
         public.experience_likes,

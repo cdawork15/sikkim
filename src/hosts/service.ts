@@ -18,7 +18,22 @@ export type Decision = {
   action: 'approved' | 'rejected' | 'suspended';
   reason: string;
   expiresAt?: string;
+  method?: VerificationMethod;
 };
+
+export const verificationMethods = [
+  'in_person',
+  'video_call',
+  'document',
+] as const;
+export type VerificationMethod = (typeof verificationMethods)[number];
+
+const verificationUnavailable = () =>
+  new AccountError(
+    503,
+    'VERIFICATION_UNAVAILABLE',
+    'Real host verification is not available yet.',
+  );
 const missing = () =>
   new AccountError(404, 'NOT_FOUND', 'Host profile was not found.');
 const conflict = () =>
@@ -92,7 +107,11 @@ export async function requirePublishableHost(
   return host.id as string;
 }
 
-export async function hostAccountData(client: PoolClient, userId: string) {
+export async function hostAccountData(
+  client: PoolClient,
+  userId: string,
+  realVerificationAvailable = false,
+) {
   const host = (
     await client.query(
       `
@@ -116,6 +135,7 @@ export async function hostAccountData(client: PoolClient, userId: string) {
           action,
           reason,
           expires_at AS "expiresAt",
+          method,
           is_demo AS "isDemo",
           created_at AS "createdAt"
         FROM public.host_verifications
@@ -129,16 +149,8 @@ export async function hostAccountData(client: PoolClient, userId: string) {
     ...host,
     history,
     uploadsAvailable: false,
-    realVerificationAvailable: false,
+    realVerificationAvailable,
   };
-}
-
-async function own(client: PoolClient, userId: string) {
-  const host = await hostAccountData(client, userId);
-  if (!host) {
-    throw missing();
-  }
-  return host;
 }
 
 async function reviewer(client: PoolClient, userId: string) {
@@ -165,6 +177,7 @@ async function record(
   action: string,
   reason: string | null,
   requestId: string,
+  method: VerificationMethod | null = null,
 ) {
   await client.query(
     `
@@ -176,7 +189,8 @@ async function record(
           reason,
           snapshot,
           expires_at,
-          is_demo
+          is_demo,
+          method
         )
       SELECT
         h.id,
@@ -195,18 +209,30 @@ async function record(
           h.contact_choice
         ),
         h.approved_until,
-        u.is_demo
+        u.is_demo,
+        $5
       FROM public.hosts h
         JOIN public.users u ON u.id = h.user_id
       WHERE h.id = $1
     `,
-    [hostId, userId, action, reason],
+    [hostId, userId, action, reason, method],
   );
   await audit(client, userId, `host.${action}`, requestId, 'host', hostId);
 }
 
 export function hostService(database: Database, config: Config) {
   const access = accountAccess(database, config);
+  const manual = config.hostVerification === 'manual';
+  // Demo hosts can complete the flow only on a local demo server; real hosts
+  // need the manual verification process to be switched on.
+  const verifiable = (isDemo: boolean) => (isDemo ? config.demoAuth : manual);
+  async function own(client: PoolClient, userId: string) {
+    const host = await hostAccountData(client, userId, manual);
+    if (!host) {
+      throw missing();
+    }
+    return host;
+  }
   return {
     me: (token: string) => access(token, (client, p) => own(client, p.userId)),
     draft: (token: string, patch: HostDraft, requestId: string) =>
@@ -316,12 +342,8 @@ export function hostService(database: Database, config: Config) {
             'Add a public name, introduction and at least one service area.',
           );
         }
-        if (!config.demoAuth || !host.isDemo) {
-          throw new AccountError(
-            503,
-            'VERIFICATION_UNAVAILABLE',
-            'Real host verification is not available yet.',
-          );
+        if (!verifiable(host.isDemo)) {
+          throw verificationUnavailable();
         }
         await client.query(
           `
@@ -421,14 +443,18 @@ export function hostService(database: Database, config: Config) {
             'This decision does not match the current application status.',
           );
         }
+        if (decision.action !== 'suspended' && !verifiable(host.isDemo)) {
+          throw verificationUnavailable();
+        }
         if (
-          decision.action !== 'suspended' &&
-          (!config.demoAuth || !host.isDemo)
+          decision.action === 'approved' && !host.isDemo
+            ? !decision.method
+            : decision.method !== undefined
         ) {
           throw new AccountError(
-            503,
-            'VERIFICATION_UNAVAILABLE',
-            'Real host verification is not available yet.',
+            400,
+            'INVALID_REQUEST',
+            'Record how the identity was checked when approving a real host.',
           );
         }
         if (decision.action === 'approved' && host.accountStatus !== 'active') {
@@ -471,6 +497,7 @@ export function hostService(database: Database, config: Config) {
           decision.action,
           decision.reason.trim(),
           requestId,
+          decision.method ?? null,
         );
         return own(client, host.userId);
       }),
