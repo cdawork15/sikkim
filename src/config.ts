@@ -146,6 +146,27 @@ export function loadConfig(env: Environment = process.env) {
       'HOST_VERIFICATION_MODE must be disabled or manual',
     );
   }
+  // One-time sign-in codes. 'console' writes codes to the server log and is
+  // for local development only; production needs a real email/SMS provider.
+  const otpDelivery = env.OTP_DELIVERY ?? 'disabled';
+  if (!['disabled', 'console'].includes(otpDelivery)) {
+    throw new ConfigurationError('OTP_DELIVERY must be disabled or console');
+  }
+  if (otpDelivery === 'console' && production) {
+    throw new ConfigurationError(
+      'OTP_DELIVERY=console is for local development only',
+    );
+  }
+  const otpSecret = env.OTP_SECRET ?? '';
+  if (otpDelivery !== 'disabled' && otpSecret.length < 32) {
+    throw new ConfigurationError('OTP_SECRET must be at least 32 characters');
+  }
+  const countryCode = env.OTP_DEFAULT_COUNTRY_CODE ?? '91';
+  if (!/^[1-9]\d{0,2}$/.test(countryCode)) {
+    throw new ConfigurationError(
+      'OTP_DEFAULT_COUNTRY_CODE must be 1–3 digits, without +',
+    );
+  }
   const storageMode = env.MEDIA_STORAGE_MODE ?? 'local';
   if (!['local', 'single_server'].includes(storageMode)) {
     throw new ConfigurationError('Invalid MEDIA_STORAGE_MODE');
@@ -189,6 +210,11 @@ export function loadConfig(env: Environment = process.env) {
     mode,
     demoAuth,
     hostVerification: hostVerification as 'disabled' | 'manual',
+    otp: {
+      delivery: otpDelivery as 'disabled' | 'console',
+      secret: otpSecret,
+      defaultCountryCode: countryCode,
+    },
     production,
     connectionString,
     origins,

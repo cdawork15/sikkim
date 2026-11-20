@@ -6,6 +6,7 @@ import { registerCatalogue } from './catalogue/routes.js';
 import { registerBookings } from './bookings/routes.js';
 import { registerHosts } from './hosts/routes.js';
 import { registerAdmin } from './admin/routes.js';
+import { registerReels } from './reels/routes.js';
 import { randomUUID } from 'node:crypto';
 import type { Writable } from 'node:stream';
 import Fastify from 'fastify';
@@ -16,6 +17,7 @@ import type { Config } from './config.js';
 import { createDatabase, type Database } from './db/database.js';
 import { registerAccounts } from './accounts/routes.js';
 import { AccountError } from './accounts/model.js';
+import type { OtpDelivery } from './accounts/otp.js';
 
 const errorSchema = {
   type: 'object',
@@ -61,6 +63,7 @@ export async function buildApp(
     database?: Database;
     logStream?: Writable;
     rateLimitMax?: number;
+    otpDelivery?: OtpDelivery;
   } = {},
 ) {
   const app = Fastify({
@@ -216,9 +219,20 @@ export async function buildApp(
     },
   );
   registerExperienceActions(app, database, config);
-  registerAccounts(app, database, config);
+  // Local development prints sign-in codes to the server log. Production
+  // needs an email/SMS provider (see README) before OTP_DELIVERY is enabled.
+  const otpDelivery: OtpDelivery =
+    options.otpDelivery ??
+    (async ({ channel, destination, code }) => {
+      app.log.info(
+        { event: 'otp_dev_code', channel, destination, code },
+        'Development sign-in code',
+      );
+    });
+  registerAccounts(app, database, config, otpDelivery);
   registerHosts(app, database, config);
   registerAdmin(app, database, config);
+  registerReels(app, database, config);
   registerCatalogue(app, database, config);
   registerBookings(app, database, config);
   registerCommunity(app, database, config);

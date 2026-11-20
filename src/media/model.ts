@@ -57,8 +57,10 @@ export type UploadIntent = {
   contentType: ContentType;
   bytes: number;
   author: string;
-  sourceUrl: string;
-  licenceUrl: string;
+  // Optional for people sharing their own footage; required by reviewers
+  // only when the media comes from someone else.
+  sourceUrl?: string;
+  licenceUrl?: string;
   permissionNote: string;
   place: string;
   altText: string;
@@ -85,8 +87,6 @@ export const uploadSchema = object(
     'contentType',
     'bytes',
     'author',
-    'sourceUrl',
-    'licenceUrl',
     'permissionNote',
     'place',
     'altText',

@@ -1,4 +1,5 @@
 import { passwordAccounts } from './password-auth.js';
+import { otpAccounts, type OtpDelivery } from './otp.js';
 import { bookingAccountData } from '../bookings/export.js';
 import { mediaAccountData } from '../media/actions.js';
 import { catalogueAccountData } from '../catalogue/read.js';
@@ -144,11 +145,22 @@ async function createSession(
   };
 }
 
-export function accountService(database: Database, config: Config) {
+export function accountService(
+  database: Database,
+  config: Config,
+  deliver: OtpDelivery = async () => {
+    throw new AccountError(
+      503,
+      'OTP_UNAVAILABLE',
+      'Sign-in codes are not available right now.',
+    );
+  },
+) {
   const authenticated = accountAccess(database, config);
 
   return {
     ...passwordAccounts(database, createSession),
+    ...otpAccounts(database, config, deliver, createSession),
     interests: () =>
       database.transaction(
         async (client) =>

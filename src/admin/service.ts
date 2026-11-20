@@ -3,11 +3,16 @@ import type { Config } from '../config.js';
 import type { Database } from '../db/database.js';
 import { accountAccess } from '../accounts/access.js';
 import { AccountError } from '../accounts/model.js';
+import {
+  hasAnyRole,
+  requireStaff,
+  requireSuper,
+  staffRoles,
+} from '../accounts/roles.js';
 import { audit } from '../db/audit.js';
 import {
   decodeCursor,
   encodeCursor,
-  forbidden,
   invalid,
   leadColumns,
   normaliseLead,
@@ -20,14 +25,6 @@ import {
 } from './model.js';
 
 const PAGE = 20;
-
-export async function requireAdmin(client: PoolClient, userId: string) {
-  const row = await client.query(
-    "SELECT 1 FROM public.user_roles WHERE user_id = $1 AND role = 'admin'",
-    [userId],
-  );
-  if (!row.rowCount) throw forbidden();
-}
 
 // Escape LIKE wildcards so search text is matched literally.
 const like = (value: string) =>
@@ -77,6 +74,22 @@ const leadSelect = `
   l.created_at AS "createdAt",
   l.updated_at AS "updatedAt"
 `;
+// How a person signs in, for the people directory.
+const identityColumns = `
+  (SELECT subject FROM public.auth_identities
+    WHERE user_id = u.id AND provider IN ('email', 'password')
+    ORDER BY created_at LIMIT 1) AS email,
+  (SELECT subject FROM public.auth_identities
+    WHERE user_id = u.id AND provider = 'phone'
+    ORDER BY created_at LIMIT 1) AS phone,
+  coalesce(
+    (SELECT array_agg(DISTINCT provider) FROM public.auth_identities WHERE user_id = u.id),
+    '{}'
+  ) AS "signInMethods",
+  (SELECT max(created_at) FROM public.audit_logs
+    WHERE actor_id = u.id AND action = 'session.created') AS "lastSignInAt"
+`;
+
 const leadFrom = `
   FROM public.crm_leads l
     LEFT JOIN public.users o ON o.id = l.owner_id
@@ -96,11 +109,8 @@ async function readLead(client: PoolClient, id: string, lock = false) {
 
 async function checkReferences(client: PoolClient, input: LeadInput) {
   if (input.ownerId) {
-    const owner = await client.query(
-      `SELECT 1 FROM public.user_roles WHERE user_id = $1 AND role = 'admin'`,
-      [input.ownerId],
-    );
-    if (!owner.rowCount) throw invalid('Assign the lead to an admin.');
+    if (!(await hasAnyRole(client, input.ownerId, staffRoles)))
+      throw invalid('Assign the lead to an admin.');
   }
   if (input.hostId) {
     const host = await client.query(
@@ -160,18 +170,28 @@ async function addNote(
 
 export function adminService(database: Database, config: Config) {
   const access = accountAccess(database, config);
+  // Staff (admin or super): trips, pipeline, bookings support.
   const asAdmin = <T>(
     token: string,
     task: (client: PoolClient, adminId: string) => Promise<T>,
   ) =>
     access(token, async (client, p) => {
-      await requireAdmin(client, p.userId);
+      await requireStaff(client, p.userId);
+      return task(client, p.userId);
+    });
+  // Super only: people, accounts and business-wide figures.
+  const asSuper = <T>(
+    token: string,
+    task: (client: PoolClient, adminId: string) => Promise<T>,
+  ) =>
+    access(token, async (client, p) => {
+      await requireSuper(client, p.userId);
       return task(client, p.userId);
     });
 
   return {
     overview: (token: string) =>
-      asAdmin(token, async (client) => {
+      asSuper(token, async (client) => {
         const one = async (sql: string, params: unknown[] = []) =>
           (await client.query(sql, params)).rows[0];
         const queue = await one(`
@@ -268,6 +288,40 @@ export function adminService(database: Database, config: Config) {
             ORDER BY 1
           `)
         ).rows;
+        const accounts = await one(`
+          SELECT
+            count(*)::int AS total,
+            count(*) FILTER (WHERE created_at > clock_timestamp() - interval '24 hours')::int AS "last24Hours",
+            count(*) FILTER (WHERE created_at > clock_timestamp() - interval '7 days')::int AS "last7Days",
+            count(*) FILTER (WHERE status = 'suspended')::int AS suspended,
+            (SELECT count(DISTINCT user_id)::int FROM public.auth_identities WHERE provider IN ('email', 'password')) AS "withEmail",
+            (SELECT count(DISTINCT user_id)::int FROM public.auth_identities WHERE provider = 'phone') AS "withPhone",
+            (SELECT count(*)::int FROM public.user_roles WHERE role = 'admin') AS admins,
+            (SELECT count(*)::int FROM public.user_roles WHERE role = 'super') AS supers
+          FROM public.users
+          WHERE NOT is_demo AND status <> 'deleted'
+        `);
+        const signups = (
+          await client.query(`
+            SELECT to_char(d, 'YYYY-MM-DD') AS day, count(u.id)::int AS accounts
+            FROM generate_series(
+              (clock_timestamp() AT TIME ZONE 'Asia/Kolkata')::date - 13,
+              (clock_timestamp() AT TIME ZONE 'Asia/Kolkata')::date,
+              interval '1 day'
+            ) AS d
+              LEFT JOIN public.users u
+                ON (u.created_at AT TIME ZONE 'Asia/Kolkata')::date = d::date
+                AND NOT u.is_demo
+            GROUP BY d
+            ORDER BY d
+          `)
+        ).rows;
+        const reels = await one(`
+          SELECT
+            count(*) FILTER (WHERE r.status = 'active' AND m.moderation = 'approved')::int AS live,
+            count(*) FILTER (WHERE r.status = 'active' AND m.moderation = 'pending')::int AS pending
+          FROM public.user_reels r JOIN public.media_assets m ON m.id = r.asset_id
+        `);
         const followUps = await one(`
           SELECT count(*)::int AS due
           FROM public.crm_leads
@@ -278,6 +332,8 @@ export function adminService(database: Database, config: Config) {
           queue,
           bookings: { last30Days: bookings, next7Days: upcoming, byArea },
           people,
+          accounts: { ...accounts, signups },
+          reels,
           hosts,
           listings,
           community,
@@ -470,7 +526,7 @@ export function adminService(database: Database, config: Config) {
       token: string,
       filter: { q?: string; role?: string; after?: string },
     ) =>
-      asAdmin(token, async (client) => {
+      asSuper(token, async (client) => {
         const cursor = decodeCursor(filter.after);
         const rows = (
           await client.query(
@@ -478,7 +534,7 @@ export function adminService(database: Database, config: Config) {
               SELECT
                 u.id,
                 u.display_name AS "displayName",
-                i.subject AS email,
+                ${identityColumns},
                 u.status,
                 u.is_demo AS "isDemo",
                 u.created_at AS "createdAt",
@@ -489,12 +545,17 @@ export function adminService(database: Database, config: Config) {
                 h.status AS "hostStatus",
                 (SELECT count(*)::int FROM public.bookings b WHERE b.user_id = u.id) AS bookings
               FROM public.users u
-                LEFT JOIN public.auth_identities i
-                  ON i.user_id = u.id AND i.provider = 'password'
                 LEFT JOIN public.user_roles r ON r.user_id = u.id
                 LEFT JOIN public.hosts h ON h.user_id = u.id
               WHERE u.status <> 'deleted'
-                AND ($1::text IS NULL OR u.display_name ILIKE $1 OR i.subject ILIKE $1)
+                AND (
+                  $1::text IS NULL
+                  OR u.display_name ILIKE $1
+                  OR EXISTS (
+                    SELECT 1 FROM public.auth_identities si
+                    WHERE si.user_id = u.id AND si.subject ILIKE $1
+                  )
+                )
                 AND (
                   $2::text IS NULL
                   OR EXISTS (
@@ -506,7 +567,7 @@ export function adminService(database: Database, config: Config) {
                   $3::timestamptz IS NULL
                   OR (u.created_at, u.id) < ($3::timestamptz, $4::uuid)
                 )
-              GROUP BY u.id, i.subject, h.status
+              GROUP BY u.id, h.status
               ORDER BY u.created_at DESC, u.id DESC
               LIMIT ${PAGE + 1}
             `,
@@ -522,14 +583,14 @@ export function adminService(database: Database, config: Config) {
       }),
 
     getUser: (token: string, id: string) =>
-      asAdmin(token, async (client) => {
+      asSuper(token, async (client) => {
         const user = (
           await client.query(
             `
               SELECT
                 u.id,
                 u.display_name AS "displayName",
-                i.subject AS email,
+                ${identityColumns},
                 u.language,
                 u.status,
                 u.is_demo AS "isDemo",
@@ -541,8 +602,6 @@ export function adminService(database: Database, config: Config) {
                 (SELECT count(*)::int FROM public.auth_sessions s
                   WHERE s.user_id = u.id AND s.expires_at > clock_timestamp()) AS "activeSessions"
               FROM public.users u
-                LEFT JOIN public.auth_identities i
-                  ON i.user_id = u.id AND i.provider = 'password'
               WHERE u.id = $1
             `,
             [id],
@@ -596,7 +655,7 @@ export function adminService(database: Database, config: Config) {
       status: 'active' | 'suspended',
       requestId: string,
     ) =>
-      asAdmin(token, async (client, adminId) => {
+      asSuper(token, async (client, adminId) => {
         if (id === adminId) throw invalid('You cannot change your own status.');
         const user = (
           await client.query(

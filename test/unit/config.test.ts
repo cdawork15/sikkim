@@ -17,6 +17,32 @@ test('configuration has bounded defaults and does not trust forwarded headers', 
   assert.equal(config.hostVerification, 'disabled');
 });
 
+test('sign-in codes need a long secret and are dev-only on the console', () => {
+  assert.equal(loadConfig(testEnvironment).otp.delivery, 'disabled');
+  const secret = 'x'.repeat(32);
+  assert.equal(
+    loadConfig({
+      ...testEnvironment,
+      OTP_DELIVERY: 'console',
+      OTP_SECRET: secret,
+    }).otp.delivery,
+    'console',
+  );
+  assert.throws(() =>
+    loadConfig({
+      ...testEnvironment,
+      OTP_DELIVERY: 'console',
+      OTP_SECRET: 'short',
+    }),
+  );
+  assert.throws(() =>
+    loadConfig({ ...testEnvironment, OTP_DELIVERY: 'sms', OTP_SECRET: secret }),
+  );
+  assert.throws(() =>
+    loadConfig({ ...testEnvironment, OTP_DEFAULT_COUNTRY_CODE: '+91' }),
+  );
+});
+
 test('host verification mode is explicit', () => {
   assert.equal(
     loadConfig({ ...testEnvironment, HOST_VERIFICATION_MODE: 'manual' })

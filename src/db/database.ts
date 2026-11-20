@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import pg from 'pg';
 import type { Config } from '../config.js';
 
-export const latestMigration = '1770000008000_admin-crm';
+export const latestMigration = '1770000009000_roles-otp-reels';
 
 export function poolOptions(
   config: Config,

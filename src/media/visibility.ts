@@ -53,5 +53,13 @@ export const linkedPublicAsset = `
       WHERE si.asset_id = m.id
         AND ${visibleStory}
     )
+    OR EXISTS (
+      SELECT 1
+      FROM public.user_reels r
+      WHERE r.asset_id = m.id
+        AND r.status = 'active'
+        AND r.user_id = m.owner_id
+        AND m.kind = 'video'
+    )
   )
 `;

@@ -4,23 +4,15 @@ import type { PoolClient } from 'pg';
 import { AccountError } from '../accounts/model.js';
 import { audit } from '../db/audit.js';
 import { requirePublishableHost } from '../hosts/service.js';
+import { requireStaff } from '../accounts/roles.js';
 import { changed, invalid, missing, type Draft, type Review } from './model.js';
 
 export async function requireReviewer(client: PoolClient, userId: string) {
-  if (
-    !(
-      await client.query(
-        "SELECT 1 FROM public.user_roles WHERE user_id=$1 AND role='admin'",
-        [userId],
-      )
-    ).rowCount
-  ) {
-    throw new AccountError(
-      403,
-      'FORBIDDEN',
-      'Only an authorised reviewer can do this.',
-    );
-  }
+  await requireStaff(
+    client,
+    userId,
+    'Only an authorised reviewer can do this.',
+  );
 }
 
 export async function privateDetail(

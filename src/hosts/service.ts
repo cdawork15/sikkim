@@ -4,6 +4,7 @@ import type { Database } from '../db/database.js';
 import { accountAccess } from '../accounts/access.js';
 import { AccountError } from '../accounts/model.js';
 import { audit } from '../db/audit.js';
+import { hasAnyRole, requireStaff, staffRoles } from '../accounts/roles.js';
 
 export type HostDraft = {
   revision: number;
@@ -154,20 +155,11 @@ export async function hostAccountData(
 }
 
 async function reviewer(client: PoolClient, userId: string) {
-  if (
-    !(
-      await client.query(
-        "SELECT 1 FROM public.user_roles WHERE user_id=$1 AND role='admin'",
-        [userId],
-      )
-    ).rowCount
-  ) {
-    throw new AccountError(
-      403,
-      'FORBIDDEN',
-      'Only an authorised reviewer can do this.',
-    );
-  }
+  await requireStaff(
+    client,
+    userId,
+    'Only an authorised reviewer can do this.',
+  );
 }
 
 async function record(
@@ -177,7 +169,7 @@ async function record(
   action: string,
   reason: string | null,
   requestId: string,
-  method: VerificationMethod | null = null,
+  method: VerificationMethod | 'staff' | null = null,
 ) {
   await client.query(
     `
@@ -342,7 +334,11 @@ export function hostService(database: Database, config: Config) {
             'Add a public name, introduction and at least one service area.',
           );
         }
-        if (!verifiable(host.isDemo)) {
+        // Staff (admin/super) are known to the team, so their own host
+        // profile is approved straight away to let them run trips.
+        const staff =
+          !host.isDemo && (await hasAnyRole(client, p.userId, staffRoles));
+        if (!staff && !verifiable(host.isDemo)) {
           throw verificationUnavailable();
         }
         await client.query(
@@ -357,6 +353,29 @@ export function hostService(database: Database, config: Config) {
           [host.id],
         );
         await record(client, host.id, p.userId, 'submitted', null, requestId);
+        if (staff) {
+          await client.query(
+            `
+              UPDATE public.hosts
+              SET
+                status = 'approved',
+                approved_until = clock_timestamp() + interval '1 year',
+                revision = revision + 1,
+                updated_at = CURRENT_TIMESTAMP
+              WHERE id = $1
+            `,
+            [host.id],
+          );
+          await record(
+            client,
+            host.id,
+            p.userId,
+            'approved',
+            'Staff account: identity known to the team.',
+            requestId,
+            'staff',
+          );
+        }
         return own(client, p.userId);
       }),
     reviewList: (token: string, status: string, after: string | undefined) =>

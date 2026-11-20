@@ -62,8 +62,8 @@ export function mediaCard(asset: Asset, config: Config) {
     place: asset.place,
     credit: {
       author: asset.author,
-      sourceUrl: asset.source_url,
-      licenceUrl: asset.licence_url,
+      sourceUrl: asset.source_url || null,
+      licenceUrl: asset.licence_url || null,
     },
     urls: Object.fromEntries(
       Object.keys(asset.variants).map((variant) => [

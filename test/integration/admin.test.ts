@@ -8,7 +8,7 @@ import { migrate } from '../../src/db/maintenance.js';
 import { requirePublishableHost } from '../../src/hosts/service.js';
 
 const TABLES = `
-  public.crm_lead_notes, public.crm_leads, public.community_photos,
+  public.user_reels, public.auth_otp_challenges, public.crm_lead_notes, public.crm_leads, public.community_photos,
   public.community_events, public.booking_changes, public.tickets,
   public.bookings, public.seat_holds, public.experience_slots,
   public.story_views, public.saved_items, public.experience_likes,
@@ -55,8 +55,9 @@ test('admin workspace and curator CRM against isolated PostgreSQL', async (t) =>
   const admin = await register('Asha Admin', 'asha@example.test');
   const host = await register('Dawa Lepcha', 'dawa@example.test');
   const traveller = await register('Mina Rai', 'mina@example.test');
+  // The CRM operator here is a super admin (people and analytics need super).
   await owner.query(
-    `INSERT INTO public.user_roles (user_id, role) VALUES ($1, 'admin')`,
+    `INSERT INTO public.user_roles (user_id, role) VALUES ($1, 'admin'), ($1, 'super')`,
     [admin.id],
   );
   const call = (

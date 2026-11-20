@@ -19,7 +19,7 @@ export const leadVerdicts = [
 ] as const;
 export const siteVisits = ['not_needed', 'pending', 'done'] as const;
 export const noteKinds = ['note', 'call', 'visit', 'message'] as const;
-export const roleFilters = ['admin', 'host'] as const;
+export const roleFilters = ['super', 'admin', 'host'] as const;
 export const bookingStatuses = ['confirmed', 'cancelled', 'no_show'] as const;
 
 export type LeadStage = (typeof leadStages)[number];

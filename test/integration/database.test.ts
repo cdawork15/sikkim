@@ -37,7 +37,7 @@ test(
     );
     await owner.query(
       `
-      DROP TABLE IF EXISTS public.crm_lead_notes, public.crm_leads, public.community_photos, public.community_events, public.booking_changes,
+      DROP TABLE IF EXISTS public.user_reels, public.auth_otp_challenges, public.crm_lead_notes, public.crm_leads, public.community_photos, public.community_events, public.booking_changes,
         public.tickets,
         public.bookings,
         public.seat_holds,
@@ -106,7 +106,7 @@ test(
               'SELECT count(*)::int AS count FROM public.schema_migrations',
             )
           ).rows[0].count,
-          10,
+          11,
         );
         assert.equal(
           (
@@ -146,7 +146,7 @@ test(
             "UPDATE public.audit_logs SET action='changed'",
             'DELETE FROM public.audit_logs',
             `
-            TRUNCATE public.crm_lead_notes, public.crm_leads, public.community_photos, public.community_events, public.booking_changes, public.tickets, public.bookings,
+            TRUNCATE public.user_reels, public.auth_otp_challenges, public.crm_lead_notes, public.crm_leads, public.community_photos, public.community_events, public.booking_changes, public.tickets, public.bookings,
         public.seat_holds, public.experience_slots, public.story_views,
         public.saved_items,
         public.experience_likes,
@@ -267,7 +267,7 @@ test(
               'SELECT count(*)::int AS count FROM public.schema_migrations',
             )
           ).rows[0].count,
-          10,
+          11,
         );
       },
     );
@@ -300,7 +300,7 @@ test(
       async () => {
         await owner.query(
           `
-          DROP TABLE public.crm_lead_notes, public.crm_leads, public.community_photos, public.community_events, public.booking_changes,
+          DROP TABLE public.user_reels, public.auth_otp_challenges, public.crm_lead_notes, public.crm_leads, public.community_photos, public.community_events, public.booking_changes,
           public.tickets,
           public.bookings,
           public.seat_holds,
@@ -342,7 +342,7 @@ test(
               'SELECT count(*)::int AS count FROM public.schema_migrations',
             )
           ).rows[0].count,
-          10,
+          11,
         );
         assert.equal(
           (

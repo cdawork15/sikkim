@@ -1,6 +1,7 @@
 import { normalizeEmail } from './password.js';
 import { tokenHash } from './model.js';
 import type { Credentials, Registration } from './password-auth.js';
+import type { OtpDelivery, OtpRequest, OtpVerify } from './otp.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { Config } from '../config.js';
 import type { Database } from '../db/database.js';
@@ -48,8 +49,9 @@ export function registerAccounts(
   app: FastifyInstance,
   database: Database,
   config: Config,
+  deliver?: OtpDelivery,
 ) {
-  const service = accountService(database, config);
+  const service = accountService(database, config, deliver);
   app.get('/v1/interests', { schema: { querystring: noQuery } }, async () => ({
     data: await service.interests(),
   }));
@@ -142,6 +144,48 @@ export function registerAccounts(
       reply
         .code(201)
         .send({ data: await service.register(request.body, request.id) }),
+  );
+  // Passwordless sign-in and sign-up with a one-time code by email or SMS.
+  const otpLimit = {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+  };
+  app.post<{ Body: OtpRequest }>(
+    '/v1/auth/otp/request',
+    {
+      ...otpLimit,
+      schema: {
+        querystring: noQuery,
+        body: object(
+          {
+            channel: { type: 'string', enum: ['email', 'phone'] },
+            destination: { type: 'string', minLength: 3, maxLength: 254 },
+          },
+          ['channel', 'destination'],
+        ),
+      },
+    },
+    async (request, reply) =>
+      reply.code(202).send({ data: await service.requestCode(request.body) }),
+  );
+  app.post<{ Body: OtpVerify }>(
+    '/v1/auth/otp/verify',
+    {
+      ...otpLimit,
+      schema: {
+        querystring: noQuery,
+        body: object(
+          {
+            challengeId: { type: 'string', format: 'uuid' },
+            code: { type: 'string', pattern: '^[0-9]{6}$' },
+            displayName: text(80),
+          },
+          ['challengeId', 'code'],
+        ),
+      },
+    },
+    async (request) => ({
+      data: await service.verifyCode(request.body, request.id),
+    }),
   );
   app.post<{ Body: Credentials }>(
     '/v1/auth/login',
