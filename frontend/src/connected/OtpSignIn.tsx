@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { OtpChallenge } from '../api/client';
 import { useApi, useResource } from '../api/react';
 import type { Interest } from '../api/types';
-import { ErrorNotice, RequireAccount } from './shared';
+import { ErrorNotice, landingFor, RequireAccount } from './shared';
 
 type Step = 'start' | 'code';
 
@@ -71,7 +71,7 @@ export function OtpSignIn({
       navigate(
         result.isNewAccount
           ? '/onboarding?next=' + encodeURIComponent(destination)
-          : destination,
+          : landingFor(result.user, destination),
         { replace: true },
       );
     });

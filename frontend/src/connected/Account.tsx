@@ -8,7 +8,13 @@ import type {
   Interest,
   Settings,
 } from '../api/types';
-import { ErrorNotice, isStaff, Loading, RequireAccount } from './shared';
+import {
+  ErrorNotice,
+  isStaff,
+  landingFor,
+  Loading,
+  RequireAccount,
+} from './shared';
 import { OtpSignIn } from './OtpSignIn';
 
 export function Welcome() {
@@ -100,7 +106,11 @@ export function Welcome() {
                       })
                     : api.login(credentials);
                   void task
-                    .then(() => navigate(destination, { replace: true }))
+                    .then((account) =>
+                      navigate(landingFor(account, destination), {
+                        replace: true,
+                      }),
+                    )
                     .catch((failure: unknown) =>
                       setError(
                         failure instanceof Error
@@ -221,6 +231,44 @@ export function Welcome() {
     </div>
   );
 }
+/** Staff shortcuts, shown first so the CRM is never hidden behind personal settings. */
+function StaffPanel({ roles }: { roles: string[] }) {
+  const superAdmin = roles.includes('super');
+  const links: [string, string, string][] = [
+    ['/admin?tab=pipeline', 'CRM pipeline', 'Curators, follow-ups and notes'],
+    ['/admin?tab=approvals', 'Approvals', 'Hosts, trips and reels to review'],
+    ['/hosting', 'Create a trip', 'Your trips, dates and guests'],
+    ['/admin?tab=bookings', 'Bookings', 'Find any booking or ticket'],
+    ...(superAdmin
+      ? ([
+          ['/admin?tab=overview', 'Overview', 'Accounts, bookings and growth'],
+          ['/admin?tab=users', 'People', 'Every account and its details'],
+        ] as [string, string, string][])
+      : []),
+  ];
+  return (
+    <section className="staff-panel" aria-label="Staff workspace">
+      <div className="staff-panel-head">
+        <div>
+          <p className="ops-kicker">{superAdmin ? 'Super admin' : 'Admin'}</p>
+          <h2>Operations and CRM</h2>
+        </div>
+        <Link className="button button-primary" to="/admin">
+          Open Operations
+        </Link>
+      </div>
+      <div className="staff-panel-links">
+        {links.map(([to, title, note]) => (
+          <Link key={to} to={to}>
+            <strong>{title}</strong>
+            <span>{note}</span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function Account() {
   return (
     <div className="page interior-page">
@@ -236,14 +284,7 @@ function AccountContent() {
     <>
       <h1>Your account</h1>
       {result.data && isStaff(result.data.roles) && (
-        <div className="api-actions">
-          <Link className="button button-primary" to="/admin">
-            Operations
-          </Link>
-          <Link className="button button-secondary" to="/review">
-            Review workspace
-          </Link>
-        </div>
+        <StaffPanel roles={result.data.roles} />
       )}
       <div className="api-actions">
         <Link className="button button-secondary" to="/hosting">

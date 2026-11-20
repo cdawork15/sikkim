@@ -80,6 +80,8 @@ Paid checkout, real email/SMS delivery of sign-in codes, and Community chat and 
 
 ## Changelog
 
+- **2026-11-20** Staff land in Operations after signing in; red **Admin** button in the header; account page starts with an Operations and CRM panel for staff.
+
 - **2026-11-20** One-time-code sign-in with onboarding (S01/S02), role-aware Operations (admin vs super), account analytics and People directory, “Create a trip” entry point, traveller reels (share, review, shown in Explore).
 
 - **2026-11-20** Operations workspace (`/admin`): overview metrics, curator CRM pipeline with lead editor and activity notes, approvals, hosts, users (suspend or restore), booking lookup. Host review can approve real hosts with a recorded identity-check method.

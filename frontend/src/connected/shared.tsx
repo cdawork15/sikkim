@@ -41,6 +41,12 @@ export function Empty({ children }: { children: ReactNode }) {
 export const isStaff = (roles: string[] = []) =>
   roles.includes('admin') || roles.includes('super');
 export const isSuper = (roles: string[] = []) => roles.includes('super');
+/** Staff land in Operations after signing in, unless a page asked for them. */
+export const landingFor = (
+  account: { roles: string[] },
+  destination: string,
+) =>
+  destination === '/account' && isStaff(account.roles) ? '/admin' : destination;
 
 export function RequireAccount({
   children,

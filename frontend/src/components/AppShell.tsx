@@ -45,6 +45,7 @@ export function AppShell({
       '/account': 'Your account',
       '/settings': 'Privacy & settings',
       '/review': 'Review workspace',
+      '/admin': 'Operations',
       '/review/media': 'Media review',
     };
     const name =
@@ -120,6 +121,13 @@ export function AppShell({
             ))}
           </nav>
           <div className="header-actions">
+            {connected &&
+              (account?.roles.includes('admin') ||
+                account?.roles.includes('super')) && (
+                <Link to="/admin" className="header-admin">
+                  Admin
+                </Link>
+              )}
             <Link
               to="/explore?view=list"
               className="header-search"
