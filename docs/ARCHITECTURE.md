@@ -51,6 +51,36 @@ Design rules that shape the code:
 - **Optimistic concurrency.** Editable records carry a `revision`; stale writes get `409` and the client reloads.
 - **Errors never leak internals.** Responses are `{error: {code, message, requestId}}`; logs redact tokens and cookies.
 
+## Sign-in with a one-time code
+
+```mermaid
+sequenceDiagram
+  actor P as Person
+  participant W as Web app
+  participant A as API
+  participant D as Email / SMS
+  P->>W: phone or email
+  W->>A: POST /auth/otp/request
+  A->>A: 6-digit code, stored only as an HMAC hash (10 min)
+  A->>D: send code
+  D-->>P: code
+  P->>W: enter code
+  W->>A: POST /auth/otp/verify
+  A->>A: check (max 5 tries) · find or create account
+  A-->>W: session (+ isNewAccount)
+  W-->>P: new account → name and interests (S02)
+```
+
+## Account types
+
+```mermaid
+flowchart LR
+  U["User<br/>browse · book · save · share reels"] --> AD["Admin<br/>+ create trips · review · pipeline · bookings"]
+  AD --> SU["Super<br/>+ overview analytics · people directory · suspend"]
+```
+
+Roles are granted only with `npm run admin` on the server.
+
 ## Request lifecycle
 
 ```mermaid
