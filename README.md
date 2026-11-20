@@ -52,12 +52,13 @@ To open the Operations workspace, register in the app and grant yourself admin o
 
 Build-time variables (see `.env.example`). They end up in public JavaScript, so never put secrets here.
 
-| Variable            | Default | Purpose                                                  |
-| ------------------- | ------- | -------------------------------------------------------- |
-| `VITE_DATA_MODE`    | `api`   | `api` uses the backend; `demo` uses browser-only samples |
-| `VITE_API_BASE_URL` | `/v1`   | API base path or absolute URL                            |
+| Variable               | Default                 | Purpose                                                  |
+| ---------------------- | ----------------------- | -------------------------------------------------------- |
+| `VITE_DATA_MODE`       | `api`                   | `api` uses the backend; `demo` uses browser-only samples |
+| `VITE_API_BASE_URL`    | `/v1`                   | API base path or absolute URL                            |
+| `DEV_API_PROXY_TARGET` | `http://127.0.0.1:3000` | Dev server only: where `/v1` is proxied                  |
 
-The dev proxy target is the local backend (`vite.config.ts`). In production, serve `dist/` with an `index.html` fallback and route `/v1` to the API.
+In production, serve `dist/` with an `index.html` fallback and route `/v1` to the API.
 
 ## Check
 
