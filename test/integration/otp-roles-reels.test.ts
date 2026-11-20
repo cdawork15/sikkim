@@ -257,6 +257,7 @@ test('OTP sign-in, account types and community reels', async (t) => {
       for (const path of [
         '/admin/leads',
         '/admin/bookings',
+        '/admin/queue',
         '/admin/hosts?status=pending',
       ]) {
         assert.equal(

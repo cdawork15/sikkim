@@ -58,7 +58,11 @@ export function registerAccounts(
   app.get('/v1/settings', { schema: { querystring: noQuery } }, async () => ({
     data: {
       auth: {
-        mode: 'password',
+        // 'otp' when sign-in codes can be sent; password sign-in stays available.
+        mode: config.otp.delivery === 'disabled' ? 'password' : 'otp',
+        otpChannels:
+          config.otp.delivery === 'disabled' ? [] : ['email', 'phone'],
+        passwordSignInAvailable: true,
         realSignInAvailable: true,
         emailVerificationAvailable: false,
         passwordRecoveryAvailable: false,

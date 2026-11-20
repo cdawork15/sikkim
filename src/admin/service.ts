@@ -190,6 +190,23 @@ export function adminService(database: Database, config: Config) {
     });
 
   return {
+    // Work waiting for staff: review queues and CRM follow-ups.
+    queue: (token: string) =>
+      asAdmin(token, async (client) => {
+        return (
+          await client.query(`
+            SELECT
+              (SELECT count(*)::int FROM public.hosts WHERE status = 'pending') AS hosts,
+              (SELECT count(*)::int FROM public.experiences WHERE status = 'review') AS experiences,
+              (SELECT count(*)::int FROM public.media_assets
+                 WHERE moderation = 'pending' AND state = 'ready') AS media,
+              (SELECT count(*)::int FROM public.crm_leads
+                 WHERE next_follow_up <= (clock_timestamp() AT TIME ZONE 'Asia/Kolkata')::date
+                   AND stage NOT IN ('live', 'declined')) AS "followUpsDue"
+          `)
+        ).rows[0];
+      }),
+
     overview: (token: string) =>
       asSuper(token, async (client) => {
         const one = async (sql: string, params: unknown[] = []) =>

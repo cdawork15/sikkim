@@ -66,6 +66,11 @@ export function registerAdmin(
     bearerToken(headers.authorization);
 
   app.get(
+    '/v1/admin/queue',
+    { schema: { querystring: noQuery } },
+    async (req) => ({ data: await service.queue(token(req.headers)) }),
+  );
+  app.get(
     '/v1/admin/overview',
     { schema: { querystring: noQuery } },
     async (req) => ({ data: await service.overview(token(req.headers)) }),
