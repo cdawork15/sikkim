@@ -180,7 +180,10 @@ export function AppShell({
             <Link to="/hosting">Host workspace</Link>
             <Link to="/settings">Privacy & settings</Link>
             {account?.roles.includes('admin') && (
-              <Link to="/review">Review workspace</Link>
+              <>
+                <Link to="/admin">Operations</Link>
+                <Link to="/review">Review workspace</Link>
+              </>
             )}
           </div>
         )}

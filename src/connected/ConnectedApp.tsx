@@ -19,6 +19,7 @@ import { Account, SettingsPage, Welcome } from './Account';
 import { Detail, Explore, HostDetail, Hosts } from './Catalogue';
 import { ExperienceEditor, ExperienceWorkspace, Hosting } from './Hosting';
 import { ReviewDetail, ReviewQueue } from './Review';
+import { AdminUserPage, AdminWorkspace, LeadPage } from './Admin';
 import { Home } from './Home';
 import { Empty, RequireAccount } from './shared';
 import { DEMO_KEY, DemoProvider } from '../features/DemoState';
@@ -183,6 +184,10 @@ export function ConnectedApp() {
                 </Workspace>
               }
             />
+            <Route path="admin" element={<AdminWorkspace />} />
+            <Route path="admin/leads/new" element={<LeadPage />} />
+            <Route path="admin/leads/:id" element={<LeadPage />} />
+            <Route path="admin/users/:id" element={<AdminUserPage />} />
             <Route
               path="review"
               element={

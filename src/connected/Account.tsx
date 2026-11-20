@@ -212,9 +212,14 @@ function AccountContent() {
     <>
       <h1>Your account</h1>
       {result.data?.roles.includes('admin') && (
-        <Link className="button button-secondary" to="/review">
-          Review workspace
-        </Link>
+        <div className="api-actions">
+          <Link className="button button-primary" to="/admin">
+            Operations
+          </Link>
+          <Link className="button button-secondary" to="/review">
+            Review workspace
+          </Link>
+        </div>
       )}
       <div className="api-actions">
         <Link className="button button-secondary" to="/hosting">

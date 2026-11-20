@@ -1,17 +1,63 @@
 # Sikkim Experiences
 
-React · TypeScript · Vite.
+React 19 · TypeScript · Vite · React Router. A mobile-first web app for discovering and booking local experiences in Sikkim, plus host and admin workspaces. It talks to the [backend API](https://github.com/gauravyad86/sikkim-experiences-backend) under `/v1`.
 
-## Run
+- [System architecture and workflow diagrams](https://github.com/gauravyad86/sikkim-experiences-backend/blob/main/docs/ARCHITECTURE.md)
+- [Design rules and media credits](docs/DEMO.md) · [Approved prototype](docs/design-references/)
+- [Remaining work](docs/planning/BACKLOG.md)
 
-Use Node 22.12+ and start the backend on port 3000.
+## Screens
+
+| Area                         | Routes                                                                                                                         | Data                            |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| Discovery                    | `/`, `/explore` (reels), `/explore?view=list`, `/experiences/:slug`, `/hosts`                                                  | API                             |
+| Booking                      | `/experiences/:slug/book`, `/essentials/bookings`, tickets                                                                     | API (free bookings)             |
+| Account                      | `/welcome`, `/account`, `/settings`, `/saved`                                                                                  | API                             |
+| Community                    | `/community`, events, stories                                                                                                  | API (chat is still sample data) |
+| Travel Essentials            | `/essentials`, `/essentials/:section`                                                                                          | Built-in guidance               |
+| Host workspace               | `/hosting`, listings, dates, media, stories                                                                                    | API                             |
+| Review                       | `/review`, `/review/hosts/:id`, `/review/experiences/:id`, `/review/media`                                                     | API, admins only                |
+| **Operations (admin + CRM)** | `/admin?tab=overview\|pipeline\|approvals\|hosts\|users\|bookings`, `/admin/leads/new`, `/admin/leads/:id`, `/admin/users/:id` | API, admins only                |
+
+The Operations workspace follows prototype screen S20: segmented tabs, metric tiles and red progress bars on the black theme.
+
+## App structure
+
+```mermaid
+flowchart TD
+  main["main.tsx<br/>ErrorBoundary + Router"] --> App["App.tsx"]
+  App -->|"VITE_DATA_MODE=demo"| Demo["DemoApp<br/>browser-only samples"]
+  App -->|default| Connected["connected/ConnectedApp<br/>routes"]
+  Connected --> Provider["api/react.tsx<br/>ApiProvider · useSession · useResource · useAction"]
+  Provider --> Client["api/client.ts<br/>token in memory, refresh, abort on sign-out"]
+  Client -->|"fetch /v1/*"| API[("Backend API")]
+  Connected --> Pages["connected/* pages<br/>Home · Catalogue · Bookings · Hosting · Review · Admin"]
+  Pages --> Components["components/*<br/>AppShell · ReelFeed · Icon …"]
+```
+
+## Run locally
+
+Use Node 22.12+ (Node 24 recommended) and start the backend on port 3000 first, with its latest migrations applied.
 
 ```sh
 npm ci
-npm run dev
+npm run dev        # http://127.0.0.1:5173 — /v1 is proxied to the backend
 ```
 
-Open http://127.0.0.1:5173. `/v1` requests go to the backend. Apply its latest migrations first.
+Sample mode without a backend: `VITE_DATA_MODE=demo npm run dev`.
+
+To open the Operations workspace, register in the app and grant yourself admin on the backend: `npm run admin -- grant --email=you@example.com`. Sign in again and use **Account → Operations**.
+
+## Configuration
+
+Build-time variables (see `.env.example`). They end up in public JavaScript, so never put secrets here.
+
+| Variable            | Default | Purpose                                                  |
+| ------------------- | ------- | -------------------------------------------------------- |
+| `VITE_DATA_MODE`    | `api`   | `api` uses the backend; `demo` uses browser-only samples |
+| `VITE_API_BASE_URL` | `/v1`   | API base path or absolute URL                            |
+
+The dev proxy target is the local backend (`vite.config.ts`). In production, serve `dist/` with an `index.html` fallback and route `/v1` to the API.
 
 ## Check
 
@@ -19,15 +65,15 @@ Open http://127.0.0.1:5173. `/v1` requests go to the backend. Apply its latest m
 npm run build
 npm test
 npx playwright install chromium webkit
-npm run test:api
+npm run test:api      # needs the backend running
 npm run test:e2e
 npm run format:check
 ```
 
-Accounts, discovery, media, saves and free bookings are connected. Paid checkout, real host verification, email verification/reset and Community events/chat are unfinished. Reloading requires login again.
+## Known limits
 
-Sample mode: `VITE_DATA_MODE=demo npm run dev`.
+Paid checkout, email verification and password reset, and Community chat are not built yet. Reloading the page signs you out, because tokens are kept in memory only.
 
-Deploy `dist/` with an `index.html` fallback and `/v1` backend proxy. Never put secrets in frontend env variables.
+## Changelog
 
-[Design and preview notes](docs/DEMO.md) · [Remaining work](docs/planning/BACKLOG.md)
+- **2026-11-20** Operations workspace (`/admin`): overview metrics, curator CRM pipeline with lead editor and activity notes, approvals, hosts, users (suspend or restore), booking lookup. Host review can approve real hosts with a recorded identity-check method.

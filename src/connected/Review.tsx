@@ -216,6 +216,14 @@ function Decision({
     ? ['pending', 'approved'].includes(item.status)
     : ['review', 'published'].includes(item.status);
   const self = 'userId' in item && item.userId === user?.id;
+  // Real hosts can be approved only when the server runs manual verification.
+  const realHost = isHost && !item.isDemo;
+  const canApproveHost =
+    isHost &&
+    item.status === 'pending' &&
+    (item.isDemo ||
+      ('realVerificationAvailable' in item &&
+        !!item.realVerificationAvailable));
   return (
     <>
       <ErrorNotice error={action.error} />
@@ -235,10 +243,12 @@ function Decision({
               action: decision,
               reason: String(form.get('reason')).trim(),
             };
-            if (decision === 'approved')
+            if (decision === 'approved') {
               body.expiresAt = new Date(
                 String(form.get('expiresAt')),
               ).toISOString();
+              if (realHost) body.method = String(form.get('method'));
+            }
             if (decision === 'published') {
               body.providerReference = String(
                 form.get('providerReference'),
@@ -259,8 +269,9 @@ function Decision({
       >
         <h2 className="api-wide">Review decision</h2>
         <p className="api-wide">
-          Check the complete submission before recording a decision. Test
-          accounts cannot publish real experiences.
+          {isHost && realHost
+            ? 'Check the person’s identity (in person, on a video call or with documents) before approving. Record how you checked it.'
+            : 'Check the complete submission before recording a decision. Test accounts cannot publish real experiences.'}
         </p>
         <label>
           Decision
@@ -276,11 +287,8 @@ function Decision({
             </option>
             {isHost ? (
               <>
-                <option
-                  value="approved"
-                  disabled={item.status !== 'pending' || !item.isDemo}
-                >
-                  Approve test host
+                <option value="approved" disabled={!canApproveHost}>
+                  {item.isDemo ? 'Approve test host' : 'Approve host'}
                 </option>
                 <option value="suspended" disabled={item.status !== 'approved'}>
                   Suspend
@@ -302,10 +310,25 @@ function Decision({
           </select>
         </label>
         {decision === 'approved' && (
-          <label>
-            Approval valid until (your local time)
-            <input name="expiresAt" type="datetime-local" required />
-          </label>
+          <>
+            <label>
+              Approval valid until (your local time)
+              <input name="expiresAt" type="datetime-local" required />
+            </label>
+            {realHost && (
+              <label>
+                Identity checked by
+                <select name="method" required defaultValue="">
+                  <option value="" disabled>
+                    Choose how you checked
+                  </option>
+                  <option value="in_person">Meeting in person</option>
+                  <option value="video_call">Video call</option>
+                  <option value="document">Government ID document</option>
+                </select>
+              </label>
+            )}
+          </>
         )}
         {decision === 'published' && (
           <>
