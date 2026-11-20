@@ -27,6 +27,10 @@ Base path: `/v1`. Private requests need `Authorization: Bearer <token>`.
 
 Register with `displayName`, `email`, `password`; log in with `email`, `password`. Passwords are 8–128 characters. Keep tokens in memory. Sessions expire after 30 minutes; refresh rotates the token, up to 24 hours from sign-in. Reloading the frontend requires login again.
 
+## Your profile
+
+`GET /me` returns the signed-in person's profile: name, language, roles, interests, preferences, their own sign-in `email` and `phone` (either may be `null`), `createdAt`, and `summary` with `bookings`, `saved` and `reels` counts. `PATCH /me/preferences` accepts any subset of fields, so a screen can save only what it shows.
+
 ## Free booking flow
 
 1. Get `/experiences/:id/slots`.

@@ -6,6 +6,7 @@ import { isReelsLocation } from '../lib/explore';
 import { essentialsSections } from '../pages/essentials-shared';
 import { Brand } from './Brand';
 import { Icon, type IconName } from './Icon';
+import { ProfileMenu, type MenuAccount } from './ProfileMenu';
 
 const navigation: {
   to: string;
@@ -28,10 +29,12 @@ export function AppShell({
   account,
   sessionNotice,
   connected = false,
+  onSignOut,
 }: {
-  account?: { displayName: string; roles: string[] } | null;
+  account?: MenuAccount | null;
   sessionNotice?: string;
   connected?: boolean;
+  onSignOut?: () => Promise<void>;
 } = {}) {
   const { savedIds, toggleSaved, storageNotice } = useSaved();
   const [announcement, setAnnouncement] = useState('');
@@ -42,7 +45,7 @@ export function AppShell({
 
   useEffect(() => {
     const pageNames: Record<string, string> = {
-      '/account': 'Your account',
+      '/account': 'Profile and preferences',
       '/settings': 'Privacy & settings',
       '/review': 'Review workspace',
       '/admin': 'Operations',
@@ -150,13 +153,20 @@ export function AppShell({
               )}
             </Link>
             <span className="header-divider" />
-            <Link to={account ? '/account' : '/welcome'} className="guest-link">
-              <span className="guest-avatar">
-                {account?.displayName.charAt(0) ?? 'G'}
-              </span>
-              <span>{account?.displayName ?? 'Guest explorer'}</span>
-              <Icon name="chevron" size={14} />
-            </Link>
+            {connected && account && onSignOut ? (
+              <ProfileMenu account={account} onSignOut={onSignOut} />
+            ) : (
+              <Link
+                to={account ? '/account' : '/welcome'}
+                className="guest-link"
+              >
+                <span className="guest-avatar">
+                  {account?.displayName.charAt(0) ?? 'G'}
+                </span>
+                <span>{account?.displayName ?? 'Guest explorer'}</span>
+                <Icon name="chevron" size={14} />
+              </Link>
+            )}
           </div>
         </div>
       </header>

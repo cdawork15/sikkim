@@ -31,8 +31,20 @@ async function profile(client: PoolClient, userId: string) {
           language,
           is_demo AS "isDemo",
           created_at AS "createdAt",
-          updated_at AS "updatedAt"
-        FROM public.users
+          updated_at AS "updatedAt",
+          (SELECT subject FROM public.auth_identities
+            WHERE user_id = u.id AND provider IN ('email', 'password')
+            ORDER BY created_at LIMIT 1) AS email,
+          (SELECT subject FROM public.auth_identities
+            WHERE user_id = u.id AND provider = 'phone'
+            ORDER BY created_at LIMIT 1) AS phone,
+          json_build_object(
+            'bookings', (SELECT count(*)::int FROM public.bookings WHERE user_id = u.id),
+            'saved', (SELECT count(*)::int FROM public.saved_items WHERE user_id = u.id),
+            'reels', (SELECT count(*)::int FROM public.user_reels
+              WHERE user_id = u.id AND status = 'active')
+          ) AS summary
+        FROM public.users u
         WHERE id = $1
       `,
       [userId],

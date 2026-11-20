@@ -29,6 +29,11 @@ export type Account = {
   preferences: Preferences;
   onboardingComplete: boolean;
   contentLanguage: string;
+  /** Sign-in contact details, only ever returned to the account owner. */
+  email?: string | null;
+  phone?: string | null;
+  createdAt?: string;
+  summary?: { bookings: number; saved: number; reels: number };
 };
 
 export type Session = {

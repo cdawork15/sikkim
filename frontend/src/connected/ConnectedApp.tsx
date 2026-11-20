@@ -12,7 +12,7 @@ import {
 } from './MediaWorkspace';
 import './media.css';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { ApiProvider, useSession } from '../api/react';
+import { ApiProvider, useApi, useSession } from '../api/react';
 import { AppShell } from '../components/AppShell';
 import { isReelsLocation } from '../lib/explore';
 import { Account, SettingsPage, Welcome } from './Account';
@@ -36,9 +36,15 @@ import '../features/features.css';
 import './connected.css';
 
 function Shell() {
+  const api = useApi();
   const session = useSession();
   return (
-    <AppShell account={session.user} sessionNotice={session.notice} connected />
+    <AppShell
+      account={session.user}
+      sessionNotice={session.notice}
+      onSignOut={() => api.logout()}
+      connected
+    />
   );
 }
 function Workspace({ children }: { children: import('react').ReactNode }) {

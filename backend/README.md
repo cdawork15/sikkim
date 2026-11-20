@@ -136,6 +136,8 @@ test/integration/   Tests against the disposable sikkim_test database
 
 ## Changelog
 
+- **2026-11-20** `GET /v1/me` (and the session user) also returns the owner's own `email`, `phone`, `createdAt` and `summary` (`bookings`, `saved`, `reels` counts) for the profile page.
+
 - **2026-11-20** OTP sign-in by phone or email, three account types (user, admin, super), staff hosting, community reels with review, account analytics for supers.
 
 - **2026-11-20** Admin workspace API and curator CRM (`crm_leads`, `crm_lead_notes`), manual identity verification for real hosts (`HOST_VERIFICATION_MODE`), `npm run admin` operator command, architecture diagrams.

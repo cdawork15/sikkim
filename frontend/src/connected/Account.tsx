@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAction, useApi, useResource, useSession } from '../api/react';
 import type {
@@ -16,6 +16,7 @@ import {
   RequireAccount,
 } from './shared';
 import { OtpSignIn } from './OtpSignIn';
+import { formatPhone, initialOf, roleLabel } from '../components/ProfileMenu';
 
 export function Welcome() {
   const api = useApi();
@@ -231,7 +232,7 @@ export function Welcome() {
     </div>
   );
 }
-/** Staff shortcuts, shown first so the CRM is never hidden behind personal settings. */
+/** Staff shortcuts. Operations is also one tap away from the header Admin button and the account menu. */
 function StaffPanel({ roles }: { roles: string[] }) {
   const superAdmin = roles.includes('super');
   const links: [string, string, string][] = [
@@ -278,38 +279,156 @@ export function Account() {
     </div>
   );
 }
+
+const profileSections = [
+  ['about', 'About you', 'Name, language and sign-in'],
+  ['interests', 'Interests', 'What we show you first'],
+  ['travel', 'Travel preferences', 'Area, dates, group and pace'],
+  ['notifications', 'Notifications & privacy', 'Alerts and visibility'],
+] as const;
+type ProfileSection = (typeof profileSections)[number][0];
+
+const formatJoined = (value?: string) =>
+  value
+    ? new Intl.DateTimeFormat('en-IN', {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'Asia/Kolkata',
+      }).format(new Date(value))
+    : null;
+
 function AccountContent() {
   const result = useResource<AccountData>('/me', true);
+  const [params] = useSearchParams();
+  const requested = params.get('section');
+  const section: ProfileSection =
+    profileSections.find(([key]) => key === requested)?.[0] ?? 'about';
+  const account = result.data;
   return (
     <>
-      <h1>Your account</h1>
-      {result.data && isStaff(result.data.roles) && (
-        <StaffPanel roles={result.data.roles} />
-      )}
-      <div className="api-actions">
-        <Link className="button button-secondary" to="/hosting">
-          Host workspace
-        </Link>
-        <Link className="button button-secondary" to="/settings">
-          Privacy & settings
-        </Link>
-      </div>
       {result.loading && <Loading />}
       <ErrorNotice error={result.error} retry={result.reload} />
-      {result.data && (
-        <Profile
-          key={result.data.id}
-          account={result.data}
-          saved={result.replace}
-        />
+      {account && (
+        <>
+          <ProfileHeader account={account} />
+          <div className="profile-layout">
+            <nav className="profile-tabs" aria-label="Profile sections">
+              {profileSections.map(([key, title, note]) => (
+                <Link
+                  key={key}
+                  to={`?section=${key}`}
+                  replace
+                  aria-current={section === key ? 'page' : undefined}
+                >
+                  <strong>{title}</strong>
+                  <span>{note}</span>
+                </Link>
+              ))}
+            </nav>
+            <div className="profile-section">
+              <ProfileForm
+                key={`${account.id}-${section}`}
+                section={section}
+                account={account}
+                saved={result.replace}
+              />
+            </div>
+          </div>
+          {isStaff(account.roles) && <StaffPanel roles={account.roles} />}
+          <AccountLinks />
+        </>
       )}
     </>
   );
 }
-function Profile({
+
+function ProfileHeader({ account }: { account: AccountData }) {
+  const joined = formatJoined(account.createdAt);
+  const summary = account.summary;
+  const role = roleLabel(account.roles);
+  const alsoHost = account.roles.includes('host') && role !== 'Host';
+  return (
+    <>
+      <header className="profile-hero">
+        <span className="profile-avatar" aria-hidden="true">
+          {initialOf(account.displayName)}
+        </span>
+        <div>
+          <h1>{account.displayName}</h1>
+          <p>
+            {[formatPhone(account.phone), account.email]
+              .filter(Boolean)
+              .join(' · ') || 'Signed in'}
+          </p>
+          <div className="profile-badges">
+            <span className="profile-role">{role}</span>
+            {alsoHost && <span className="profile-role">Host</span>}
+            {joined && <span className="api-muted">Member since {joined}</span>}
+          </div>
+        </div>
+      </header>
+      {summary && (
+        <div className="profile-stats">
+          <Link to="/essentials/bookings">
+            <strong>{summary.bookings}</strong>
+            <span>Bookings</span>
+          </Link>
+          <Link to="/saved">
+            <strong>{summary.saved}</strong>
+            <span>Saved</span>
+          </Link>
+          <Link to="/reels/new">
+            <strong>{summary.reels}</strong>
+            <span>Reels shared</span>
+          </Link>
+        </div>
+      )}
+    </>
+  );
+}
+
+function AccountLinks() {
+  const api = useApi();
+  const action = useAction();
+  const navigate = useNavigate();
+  const signOut = (all: boolean) =>
+    void action.run(async () => {
+      await api.logout(all);
+      navigate('/welcome', { replace: true });
+    });
+  return (
+    <section className="profile-links" aria-label="More">
+      <ErrorNotice error={action.error} />
+      <Link to="/hosting">
+        Host workspace <span aria-hidden="true">›</span>
+      </Link>
+      <Link to="/settings">
+        Privacy & settings <span aria-hidden="true">›</span>
+      </Link>
+      <button
+        type="button"
+        disabled={action.busy}
+        onClick={() => signOut(false)}
+      >
+        Sign out
+      </button>
+      <button
+        type="button"
+        disabled={action.busy}
+        onClick={() => signOut(true)}
+      >
+        Sign out on all devices
+      </button>
+    </section>
+  );
+}
+
+function ProfileForm({
+  section,
   account,
   saved,
 }: {
+  section: ProfileSection;
   account: AccountData;
   saved: (data: AccountData) => void;
 }) {
@@ -317,35 +436,51 @@ function Profile({
   const action = useAction();
   const interests = useResource<Interest[]>('/interests');
   const options = useResource<CatalogueOptions>('/catalogue/options');
-  async function save(path: string, method: string, body: unknown) {
-    const result = await api.request<AccountData>(path, {
-      method,
-      body,
-      private: true,
-    });
-    api.updateUser(result.data);
-    saved(result.data);
-  }
   const preferences = account.preferences;
-  return (
+  function submit(
+    path: string,
+    method: string,
+    body: (data: FormData) => unknown,
+    message: string,
+  ) {
+    return (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const data = new FormData(event.currentTarget);
+      void action.run(async () => {
+        const result = await api.request<AccountData>(path, {
+          method,
+          body: body(data),
+          private: true,
+        });
+        api.updateUser(result.data);
+        saved(result.data);
+      }, message);
+    };
+  }
+  const status = (
     <>
       <ErrorNotice error={action.error} />
-      <ErrorNotice error={interests.error} retry={interests.reload} />
-      <ErrorNotice error={options.error} retry={options.reload} />
+      {action.message && (
+        <p className="api-wide profile-saved" role="status">
+          {action.message}
+        </p>
+      )}
+    </>
+  );
+
+  if (section === 'about')
+    return (
       <form
         className="api-panel api-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const data = new FormData(event.currentTarget);
-          void action.run(
-            () =>
-              save('/me', 'PATCH', {
-                displayName: String(data.get('name')).trim(),
-                language: data.get('language'),
-              }),
-            'Your profile is saved.',
-          );
-        }}
+        onSubmit={submit(
+          '/me',
+          'PATCH',
+          (data) => ({
+            displayName: String(data.get('name')).trim(),
+            language: data.get('language'),
+          }),
+          'Your details are saved.',
+        )}
       >
         <h2 className="api-wide">About you</h2>
         <label>
@@ -354,6 +489,8 @@ function Profile({
             name="name"
             required
             maxLength={80}
+            pattern={'.*\\S.*'}
+            autoComplete="name"
             defaultValue={account.displayName}
           />
         </label>
@@ -366,31 +503,46 @@ function Profile({
           </select>
         </label>
         <p className="api-wide api-muted">
-          Content is currently available in English. Your language preference
-          will be saved.
+          Content is currently in English. We’ll remember your language for when
+          translations arrive.
+        </p>
+        <dl className="api-wide profile-signin">
+          <div>
+            <dt>Mobile</dt>
+            <dd>{formatPhone(account.phone) ?? 'Not added'}</dd>
+          </div>
+          <div>
+            <dt>Email</dt>
+            <dd>{account.email ?? 'Not added'}</dd>
+          </div>
+        </dl>
+        <p className="api-wide api-muted">
+          You sign in with a one-time code sent to these.
         </p>
         <button className="button button-primary" disabled={action.busy}>
-          Save profile
+          Save details
         </button>
-        {action.message === 'Your profile is saved.' && (
-          <p className="api-wide" role="status">
-            {action.message}
-          </p>
-        )}
+        {status}
       </form>
+    );
+
+  if (section === 'interests')
+    return (
       <form
         className="api-panel"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const data = new FormData(event.currentTarget);
-          void action.run(
-            () =>
-              save('/me/interests', 'PUT', { codes: data.getAll('interest') }),
-            'Your interests are saved.',
-          );
-        }}
+        onSubmit={submit(
+          '/me/interests',
+          'PUT',
+          (data) => ({ codes: data.getAll('interest') }),
+          'Your interests are saved.',
+        )}
       >
-        <h2>Your interests</h2>
+        <h2>Interests</h2>
+        <p className="api-muted">
+          Pick what you enjoy. We use this to choose what Home shows first.
+        </p>
+        <ErrorNotice error={interests.error} retry={interests.reload} />
+        {interests.loading && <Loading />}
         <div className="api-chips">
           {interests.data?.map((interest) => (
             <label className="api-check api-chip" key={interest.code}>
@@ -410,51 +562,46 @@ function Profile({
         >
           Save interests
         </button>
-        {action.message === 'Your interests are saved.' && (
-          <p className="api-wide" role="status">
-            {action.message}
-          </p>
-        )}
+        {status}
       </form>
+    );
+
+  if (section === 'travel')
+    return (
       <form
         className="api-panel api-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const data = new FormData(event.currentTarget);
-          void action.run(
-            () =>
-              save('/me/preferences', 'PATCH', {
-                chosenArea: data.get('area') || null,
-                tripStart: data.get('start') || null,
-                tripDays: data.get('days') ? Number(data.get('days')) : null,
-                travellers: Number(data.get('travellers')),
-                pace: data.get('pace'),
-                notificationsEnabled: data.has('notifications'),
-                showInParticipantList: data.has('participants'),
-              }),
-            'Your preferences are saved.',
-          );
-        }}
+        onSubmit={submit(
+          '/me/preferences',
+          'PATCH',
+          (data) => ({
+            chosenArea: data.get('area') || null,
+            tripStart: data.get('start') || null,
+            tripDays: data.get('days') ? Number(data.get('days')) : null,
+            travellers: Number(data.get('travellers')),
+            pace: data.get('pace'),
+          }),
+          'Your travel preferences are saved.',
+        )}
       >
-        <h2 className="api-wide">Your travel preferences</h2>
+        <h2 className="api-wide">Travel preferences</h2>
+        <ErrorNotice error={options.error} retry={options.reload} />
         <label>
           Preferred area
           <select name="area" defaultValue={preferences.chosenArea ?? ''}>
             <option value="">Not decided</option>
-            {preferences.chosenArea && (
-              <option value={preferences.chosenArea}>
-                {options.data?.areas.find(
-                  (area) => area.code === preferences.chosenArea,
-                )?.name ?? preferences.chosenArea}
-              </option>
-            )}
-            {options.data?.areas
-              .filter((area) => area.code !== preferences.chosenArea)
-              .map((area) => (
-                <option key={area.code} value={area.code}>
-                  {area.name}
+            {preferences.chosenArea &&
+              !options.data?.areas.some(
+                (area) => area.code === preferences.chosenArea,
+              ) && (
+                <option value={preferences.chosenArea}>
+                  {preferences.chosenArea}
                 </option>
-              ))}
+              )}
+            {options.data?.areas.map((area) => (
+              <option key={area.code} value={area.code}>
+                {area.name}
+              </option>
+            ))}
           </select>
         </label>
         <label>
@@ -493,24 +640,6 @@ function Profile({
             <option value="balanced">Balanced</option>
           </select>
         </label>
-        <div>
-          <label className="api-check">
-            <input
-              type="checkbox"
-              name="notifications"
-              defaultChecked={preferences.notificationsEnabled}
-            />
-            Allow notifications when available
-          </label>
-          <label className="api-check">
-            <input
-              type="checkbox"
-              name="participants"
-              defaultChecked={preferences.showInParticipantList}
-            />
-            Show me in participant lists
-          </label>
-        </div>
         <p className="api-wide api-muted">
           Saving preferences does not create a trip or booking.
         </p>
@@ -518,15 +647,51 @@ function Profile({
           className="button button-primary"
           disabled={action.busy || !options.data}
         >
-          Save preferences
+          Save travel preferences
         </button>
-        {action.message === 'Your preferences are saved.' && (
-          <p className="api-wide" role="status">
-            {action.message}
-          </p>
-        )}
+        {status}
       </form>
-    </>
+    );
+
+  return (
+    <form
+      className="api-panel"
+      onSubmit={submit(
+        '/me/preferences',
+        'PATCH',
+        (data) => ({
+          notificationsEnabled: data.has('notifications'),
+          showInParticipantList: data.has('participants'),
+        }),
+        'Your choices are saved.',
+      )}
+    >
+      <h2>Notifications & privacy</h2>
+      <label className="api-check">
+        <input
+          type="checkbox"
+          name="notifications"
+          defaultChecked={preferences.notificationsEnabled}
+        />
+        Booking updates and new experiences, when notifications are available
+      </label>
+      <label className="api-check">
+        <input
+          type="checkbox"
+          name="participants"
+          defaultChecked={preferences.showInParticipantList}
+        />
+        Show my name in participant lists for events I join
+      </label>
+      <p className="api-muted">
+        Download your data or request account deletion in{' '}
+        <Link to="/settings">Privacy & settings</Link>.
+      </p>
+      <button className="button button-primary" disabled={action.busy}>
+        Save choices
+      </button>
+      {status}
+    </form>
   );
 }
 export function SettingsPage() {

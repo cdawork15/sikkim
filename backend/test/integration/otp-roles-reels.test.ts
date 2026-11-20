@@ -120,6 +120,13 @@ test('OTP sign-in, account types and community reels', async (t) => {
     assert.equal(ok.statusCode, 200, ok.body);
     assert.equal(ok.json().data.isNewAccount, true);
     assert.equal(ok.json().data.user.displayName, 'Mina Rai');
+    assert.equal(ok.json().data.user.email, 'mina@example.test');
+    assert.equal(ok.json().data.user.phone, null);
+    assert.deepEqual(ok.json().data.user.summary, {
+      bookings: 0,
+      saved: 0,
+      reels: 0,
+    });
     const reused = await verify(body.challengeId, outbox.at(-1)!.code);
     assert.equal(reused.json().error.code, 'OTP_EXPIRED');
 
@@ -147,6 +154,8 @@ test('OTP sign-in, account types and community reels', async (t) => {
       await clearCooldown();
       const user = await signIn('phone', '+91 98000 12345', 'Pema');
       assert.equal(user.isNewAccount, true);
+      assert.equal(user.user.phone, '+919800012345');
+      assert.equal(user.user.email, null);
       await clearCooldown();
       const expiredRequest = await requestCode('phone', '9800012345');
       await owner.query(
