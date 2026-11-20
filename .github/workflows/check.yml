@@ -1,0 +1,58 @@
+name: Backend checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      NODE_ENV: test
+      FRONTEND_ORIGINS: http://localhost:5173
+      DATABASE_URL: postgresql://sikkim_app:ci-app-only@127.0.0.1:55439/sikkim_test
+      MIGRATION_DATABASE_URL: postgresql://sikkim_owner:ci-owner-only@127.0.0.1:55439/sikkim_test
+      DB_TLS: 'false'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Start native PostgreSQL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-16 ffmpeg
+          printf '%s\n' /usr/lib/postgresql/16/bin >> "$GITHUB_PATH"
+          printf '%s\n' ci-admin-only > "$RUNNER_TEMP/pg-password"
+          chmod 600 "$RUNNER_TEMP/pg-password"
+          /usr/lib/postgresql/16/bin/initdb -D "$RUNNER_TEMP/sikkim-pg" -U postgres -A scram-sha-256 --pwfile="$RUNNER_TEMP/pg-password"
+          /usr/lib/postgresql/16/bin/pg_ctl -D "$RUNNER_TEMP/sikkim-pg" -l "$RUNNER_TEMP/postgres.log" -o "-h 127.0.0.1 -p 55439 -k $RUNNER_TEMP" start
+      - name: Prepare disposable databases
+        run: npm run db:setup
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '55439'
+          PGUSER: postgres
+          PGPASSWORD: ci-admin-only
+          DB_OWNER_PASSWORD: ci-owner-only
+          DB_APP_PASSWORD: ci-app-only
+      - run: npm run check
+      - run: npm run test:integration
+      - run: npm audit --audit-level=high
+      - uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
+        env:
+          GITLEAKS_ENABLE_COMMENTS: 'false'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Stop test database
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/sikkim-pg/postmaster.pid" ]; then
+            /usr/lib/postgresql/16/bin/pg_ctl -D "$RUNNER_TEMP/sikkim-pg" stop -m fast
+          fi
