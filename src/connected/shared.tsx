@@ -38,12 +38,20 @@ export function Loading() {
 export function Empty({ children }: { children: ReactNode }) {
   return <div className="api-empty">{children}</div>;
 }
+export const isStaff = (roles: string[] = []) =>
+  roles.includes('admin') || roles.includes('super');
+export const isSuper = (roles: string[] = []) => roles.includes('super');
+
 export function RequireAccount({
   children,
   admin = false,
+  superOnly = false,
 }: {
   children: ReactNode;
+  /** Staff only: admin or super. */
   admin?: boolean;
+  /** Super admins only. */
+  superOnly?: boolean;
 }) {
   const { user } = useSession();
   const location = useLocation();
@@ -101,11 +109,13 @@ export function RequireAccount({
         </div>
       </section>
     );
-  if (admin && !user.roles.includes('admin'))
+  if ((admin && !isStaff(user.roles)) || (superOnly && !isSuper(user.roles)))
     return (
       <Empty>
-        <h1>Review access required</h1>
-        <p>This area is only available to the review team.</p>
+        <h1>
+          {superOnly ? 'Super admin access required' : 'Staff access required'}
+        </h1>
+        <p>This area is only available to the Sikkim Experiences team.</p>
       </Empty>
     );
   return children;

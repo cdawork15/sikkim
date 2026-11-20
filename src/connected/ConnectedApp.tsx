@@ -20,6 +20,8 @@ import { Detail, Explore, HostDetail, Hosts } from './Catalogue';
 import { ExperienceEditor, ExperienceWorkspace, Hosting } from './Hosting';
 import { ReviewDetail, ReviewQueue } from './Review';
 import { AdminUserPage, AdminWorkspace, LeadPage } from './Admin';
+import { ShareReel } from './ShareReel';
+import { Onboarding } from './OtpSignIn';
 import { Home } from './Home';
 import { Empty, RequireAccount } from './shared';
 import { DEMO_KEY, DemoProvider } from '../features/DemoState';
@@ -184,6 +186,8 @@ export function ConnectedApp() {
                 </Workspace>
               }
             />
+            <Route path="onboarding" element={<Onboarding />} />
+            <Route path="reels/new" element={<ShareReel />} />
             <Route path="admin" element={<AdminWorkspace />} />
             <Route path="admin/leads/new" element={<LeadPage />} />
             <Route path="admin/leads/:id" element={<LeadPage />} />

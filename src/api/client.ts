@@ -1,5 +1,13 @@
 import type { Account, Envelope, Session } from './types';
 
+export type OtpChallenge = {
+  challengeId: string;
+  channel: 'email' | 'phone';
+  destination: string;
+  expiresAt: string;
+  resendAfterSeconds: number;
+};
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -93,9 +101,34 @@ export class ApiClient {
     return this.authenticate('/auth/register', credentials);
   }
 
+  /** Sends a one-time sign-in code by email or SMS. */
+  async requestOtp(channel: 'email' | 'phone', destination: string) {
+    const result = await this.raw<OtpChallenge>('/auth/otp/request', {
+      method: 'POST',
+      body: { channel, destination },
+    });
+    return result.data;
+  }
+
+  /** Signs in (or creates the account) with a code; reports new accounts. */
+  async verifyOtp(challengeId: string, code: string, displayName?: string) {
+    let isNewAccount = false;
+    const user = await this.authenticate(
+      '/auth/otp/verify',
+      { challengeId, code, ...(displayName ? { displayName } : {}) },
+      (session) => {
+        isNewAccount = Boolean(
+          (session as Session & { isNewAccount?: boolean }).isNewAccount,
+        );
+      },
+    );
+    return { user, isNewAccount };
+  }
+
   private async authenticate(
     path: string,
-    credentials: { email: string; password: string },
+    credentials: Record<string, unknown>,
+    inspect?: (session: Session) => void,
   ) {
     this.forget();
     const generation = this.snapshot.generation;
@@ -117,6 +150,7 @@ export class ApiClient {
         'The sign-in response could not be read. Please try again.',
       );
     }
+    inspect?.(session);
     this.token = session.accessToken;
     this.expires = Date.parse(session.expiresAt);
     this.emit({ user: session.user, generation, notice: '' });

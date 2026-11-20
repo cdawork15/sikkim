@@ -39,7 +39,13 @@ export type Session = {
 };
 
 export type Settings = {
-  auth: { mode: string; realSignInAvailable: boolean; guestBrowsing: boolean };
+  auth: {
+    mode: string;
+    otpChannels?: string[];
+    passwordSignInAvailable?: boolean;
+    realSignInAvailable: boolean;
+    guestBrowsing: boolean;
+  };
   languages: { content: string[]; preferences: string[]; fallback: string };
   locationRequired: boolean;
   privacy: {
@@ -202,6 +208,10 @@ export type MediaItem = {
   altText: string;
   place: string;
   placement?: string;
-  credit: { author: string; sourceUrl: string; licenceUrl: string };
+  credit: {
+    author: string;
+    sourceUrl: string | null;
+    licenceUrl: string | null;
+  };
   urls: { image?: string; video?: string; poster?: string; captions?: string };
 };

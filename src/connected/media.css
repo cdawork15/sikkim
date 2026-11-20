@@ -545,3 +545,36 @@
     scroll-snap-type: none;
   }
 }
+
+/* Traveller reels and the share entry point */
+.reel-share-link {
+  margin-left: auto;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.connected-reel-caption .reel-creator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  font-weight: 600;
+}
+.reel-avatar {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #6b3fa0;
+  font-size: 13px;
+}
+.share-reel-page {
+  max-width: 760px;
+  display: grid;
+  gap: 14px;
+}

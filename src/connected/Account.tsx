@@ -8,7 +8,8 @@ import type {
   Interest,
   Settings,
 } from '../api/types';
-import { ErrorNotice, Loading, RequireAccount } from './shared';
+import { ErrorNotice, isStaff, Loading, RequireAccount } from './shared';
+import { OtpSignIn } from './OtpSignIn';
 
 export function Welcome() {
   const api = useApi();
@@ -17,12 +18,14 @@ export function Welcome() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const [signUp, setSignUp] = useState(false);
+  const [usePassword, setUsePassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Error>();
   const submitting = useRef(false);
   const next = params.get('next') ?? '/account';
   const destination = /^\/(?![\/\\])/.test(next) ? next : '/account';
+  const otpMode = settings.data?.auth.mode === 'otp';
   return (
     <div className="page interior-page">
       <section
@@ -48,12 +51,21 @@ export function Welcome() {
           <span className="account-gate-eyebrow">
             <span /> YOUR NEXT CHAPTER
           </span>
-          <h1>{signUp ? 'Make yourself at home.' : 'Welcome back.'}</h1>
-          <p>
-            {signUp
-              ? 'A few details, and you’re ready to explore.'
-              : 'Sign in to pick up where you left off.'}
-          </p>
+          {otpMode && !usePassword ? (
+            <>
+              <h1>Experience Sikkim with the people who live here.</h1>
+              <p>Sign in or create your account with a one-time code.</p>
+            </>
+          ) : (
+            <>
+              <h1>{signUp ? 'Make yourself at home.' : 'Welcome back.'}</h1>
+              <p>
+                {signUp
+                  ? 'A few details, and you’re ready to explore.'
+                  : 'Sign in to pick up where you left off.'}
+              </p>
+            </>
+          )}
           {settings.loading && <Loading />}
           <ErrorNotice error={settings.error} retry={settings.reload} />
           <ErrorNotice error={error} />
@@ -61,7 +73,12 @@ export function Welcome() {
             <Link className="button button-primary" to={destination}>
               Continue as {user.displayName}
             </Link>
-          ) : settings.data?.auth.mode === 'password' ? (
+          ) : otpMode && !usePassword ? (
+            <OtpSignIn
+              destination={destination}
+              onUsePassword={() => setUsePassword(true)}
+            />
+          ) : settings.data?.auth.mode === 'password' || usePassword ? (
             <>
               <form
                 className="api-form password-form"
@@ -180,6 +197,13 @@ export function Welcome() {
                   somewhere safe.
                 </p>
               )}
+              {otpMode && (
+                <p className="password-switch">
+                  <button type="button" onClick={() => setUsePassword(false)}>
+                    Use a one-time code instead
+                  </button>
+                </p>
+              )}
             </>
           ) : (
             settings.data && (
@@ -211,7 +235,7 @@ function AccountContent() {
   return (
     <>
       <h1>Your account</h1>
-      {result.data?.roles.includes('admin') && (
+      {result.data && isStaff(result.data.roles) && (
         <div className="api-actions">
           <Link className="button button-primary" to="/admin">
             Operations

@@ -179,7 +179,8 @@ export function AppShell({
           <div className="footer-bottom">
             <Link to="/hosting">Host workspace</Link>
             <Link to="/settings">Privacy & settings</Link>
-            {account?.roles.includes('admin') && (
+            {(account?.roles.includes('admin') ||
+              account?.roles.includes('super')) && (
               <>
                 <Link to="/admin">Operations</Link>
                 <Link to="/review">Review workspace</Link>

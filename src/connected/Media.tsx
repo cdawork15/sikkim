@@ -18,6 +18,94 @@ import { ExperienceActions } from './ExperienceActions';
 import { MediaPlayer } from './MediaPlayer';
 
 type Reel = { experience: Experience; media: MediaItem };
+type CommunityReel = {
+  id: string;
+  caption: string;
+  place: string;
+  creator: { name: string };
+  experience: { id: string; slug: string; title: string } | null;
+  media: MediaItem;
+};
+type FeedItem =
+  | { key: string; kind: 'experience'; row: Reel }
+  | { key: string; kind: 'community'; row: CommunityReel };
+
+/** Experience reels first, with traveller reels woven in every second slot. */
+function mergeFeeds(experienceReels: Reel[], communityReels: CommunityReel[]) {
+  const items: FeedItem[] = [];
+  const max = Math.max(experienceReels.length, communityReels.length);
+  for (let i = 0; i < max; i += 1) {
+    const reel = experienceReels[i];
+    const shared = communityReels[i];
+    if (reel)
+      items.push({
+        key: 'e-' + reel.experience.id,
+        kind: 'experience',
+        row: reel,
+      });
+    if (shared)
+      items.push({ key: 'c-' + shared.id, kind: 'community', row: shared });
+  }
+  return items;
+}
+
+function CommunityReelCard({
+  row,
+  index,
+  onActive,
+  retry,
+}: {
+  row: CommunityReel;
+  index: number;
+  onActive: (index: number) => void;
+  retry: () => void;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  const [active, setActive] = useState(false);
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const visible = Boolean(entry?.isIntersecting);
+        setActive(visible);
+        if (visible) onActive(index);
+      },
+      { threshold: 0.7 },
+    );
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [index, onActive]);
+  return (
+    <article
+      ref={ref}
+      className="connected-reel"
+      aria-label={row.caption || 'Reel from ' + row.creator.name}
+    >
+      <MediaPlayer media={row.media} active={active} retry={retry} />
+      <div className="reel-shade" />
+      <div className="connected-reel-caption">
+        <p className="reel-place">
+          <Icon name="pin" size={14} />
+          {row.place || row.media.place}
+        </p>
+        <p className="reel-creator">
+          <span className="reel-avatar" aria-hidden="true">
+            {row.creator.name.slice(0, 1).toUpperCase()}
+          </span>
+          {row.creator.name}
+        </p>
+        {row.caption && <h2>{row.caption}</h2>}
+        {row.experience && (
+          <Link
+            className="reel-experience-link"
+            to={'/experiences/' + row.experience.slug}
+          >
+            {row.experience.title} <Icon name="arrow-right" size={16} />
+          </Link>
+        )}
+      </div>
+    </article>
+  );
+}
 function ReelCard({
   row,
   index,
@@ -126,19 +214,32 @@ export function Reels() {
   const result = useResource<Reel[]>(
     '/reels' + (after ? '?after=' + after : ''),
   );
-  const rows = result.data ?? [];
+  // Traveller reels join the first page of the feed.
+  const shared = useResource<CommunityReel[]>(
+    after ? null : '/community-reels',
+  );
+  const rows =
+    result.data && (after || shared.data || shared.error)
+      ? mergeFeeds(result.data, after ? [] : (shared.data ?? []))
+      : [];
+  const ready =
+    rows.length > 0 || (result.data?.length === 0 && !!(after || shared.data));
   useEffect(() => {
-    if (!result.data) return;
+    if (!ready) return;
     const target = Math.max(
       0,
-      result.data.findIndex((row) => row.experience.id === params.get('reel')),
+      rows.findIndex(
+        (item) =>
+          item.kind === 'experience' &&
+          item.row.experience.id === params.get('reel'),
+      ),
     );
     setIndex(target);
     feed.current?.scrollTo({
       top: target * feed.current.clientHeight,
       behavior: 'instant',
     });
-  }, [result.data, params]);
+  }, [ready, result.data, shared.data, params]);
   function move(direction: number) {
     if (!feed.current) return;
     const target = Math.max(0, Math.min(rows.length - 1, index + direction));
@@ -157,6 +258,9 @@ export function Reels() {
           </Link>
           <Link to="/explore?view=list">Browse all</Link>
         </nav>
+        <Link className="reel-share-link" to="/reels/new">
+          + Share a reel
+        </Link>
         <span className="reel-counter">
           {rows.length ? `${index + 1} / ${rows.length}` : ''}
         </span>
@@ -164,7 +268,7 @@ export function Reels() {
       <div className="reels-stage">
         {result.loading && <Loading />}
         <ErrorNotice error={result.error} retry={result.reload} />
-        {result.data?.length === 0 && (
+        {ready && rows.length === 0 && (
           <Empty>
             <h2>Fresh views are on their way.</h2>
             <Link className="button button-primary" to="/explore?view=list">
@@ -187,15 +291,25 @@ export function Reels() {
                 }
               }}
             >
-              {rows.map((row, position) => (
-                <ReelCard
-                  key={row.experience.id}
-                  row={row}
-                  index={position}
-                  onActive={setIndex}
-                  retry={result.reload}
-                />
-              ))}
+              {rows.map((item, position) =>
+                item.kind === 'experience' ? (
+                  <ReelCard
+                    key={item.key}
+                    row={item.row}
+                    index={position}
+                    onActive={setIndex}
+                    retry={result.reload}
+                  />
+                ) : (
+                  <CommunityReelCard
+                    key={item.key}
+                    row={item.row}
+                    index={position}
+                    onActive={setIndex}
+                    retry={shared.reload}
+                  />
+                ),
+              )}
             </div>
             <div className="reel-step-controls">
               <button

@@ -27,12 +27,19 @@ export function ConnectedMediaCredits() {
         : data.media;
   return (
     <MediaCredits
-      entries={media.map((item) => ({
-        title: item.place,
-        author: item.credit.author,
-        source: item.credit.sourceUrl,
-        licence: item.credit.licenceUrl,
-      }))}
+      entries={media.flatMap((item) =>
+        // Own footage has no external source or licence page to credit.
+        item.credit.sourceUrl && item.credit.licenceUrl
+          ? [
+              {
+                title: item.place,
+                author: item.credit.author,
+                source: item.credit.sourceUrl,
+                licence: item.credit.licenceUrl,
+              },
+            ]
+          : [],
+      )}
     >
       {result.loading && <Loading />}
       <ErrorNotice error={result.error} retry={result.reload} />

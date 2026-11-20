@@ -100,13 +100,23 @@ function AssetTile({
         {asset.author} · {asset.place}
       </p>
       <p>
-        <a href={asset.sourceUrl} target="_blank" rel="noreferrer">
-          Source
-        </a>
-        {' · '}
-        <a href={asset.licenceUrl} target="_blank" rel="noreferrer">
-          Licence
-        </a>
+        {asset.sourceUrl || asset.licenceUrl ? (
+          <>
+            {asset.sourceUrl && (
+              <a href={asset.sourceUrl} target="_blank" rel="noreferrer">
+                Source
+              </a>
+            )}
+            {asset.sourceUrl && asset.licenceUrl && ' · '}
+            {asset.licenceUrl && (
+              <a href={asset.licenceUrl} target="_blank" rel="noreferrer">
+                Licence
+              </a>
+            )}
+          </>
+        ) : (
+          'Own footage (no external source)'
+        )}
       </p>
       {admin && <p>{asset.permissionNote}</p>}
       {asset.reviewReason && <p>Review: {asset.reviewReason}</p>}

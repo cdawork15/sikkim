@@ -21,21 +21,23 @@ import {
   type Lead,
   type LeadDetail,
   type Overview,
+  type Queue,
 } from '../api/admin';
 import { ApiError } from '../api/client';
 import { useAction, useApi, useResource, useSession } from '../api/react';
 import type { CatalogueOptions, HostApplication } from '../api/types';
 import { Icon } from '../components/Icon';
-import { Empty, ErrorNotice, Loading, RequireAccount } from './shared';
+import { Empty, ErrorNotice, isSuper, Loading, RequireAccount } from './shared';
 import './admin.css';
 
+// [key, label, super only]
 const tabs = [
-  ['overview', 'Overview'],
-  ['pipeline', 'Pipeline'],
-  ['approvals', 'Approvals'],
-  ['hosts', 'Hosts'],
-  ['users', 'Users'],
-  ['bookings', 'Bookings'],
+  ['overview', 'Overview', true],
+  ['pipeline', 'Pipeline', false],
+  ['approvals', 'Approvals', false],
+  ['hosts', 'Hosts', false],
+  ['users', 'People', true],
+  ['bookings', 'Bookings', false],
 ] as const;
 type Tab = (typeof tabs)[number][0];
 
@@ -53,33 +55,46 @@ export function AdminWorkspace() {
 
 function Operations() {
   const [params, setParams] = useSearchParams();
+  const { user } = useSession();
+  const superAdmin = isSuper(user?.roles);
+  const visibleTabs = tabs.filter(
+    ([, , superOnly]) => superAdmin || !superOnly,
+  );
   const requested = params.get('tab');
-  const tab: Tab = tabs.some(([key]) => key === requested)
+  const tab: Tab = visibleTabs.some(([key]) => key === requested)
     ? (requested as Tab)
-    : 'overview';
-  const overview = useResource<Overview>('/admin/overview', true);
-  const counts: Partial<Record<Tab, number>> = overview.data
+    : visibleTabs[0]![0];
+  const overview = useResource<Overview>(
+    superAdmin ? '/admin/overview' : null,
+    true,
+  );
+  const queue = useResource<Queue>('/admin/queue', true);
+  const counts: Partial<Record<Tab, number>> = queue.data
     ? {
-        pipeline: overview.data.pipeline.followUpsDue,
-        approvals:
-          overview.data.queue.hosts +
-          overview.data.queue.experiences +
-          overview.data.queue.media,
+        pipeline: queue.data.followUpsDue,
+        approvals: queue.data.hosts + queue.data.experiences + queue.data.media,
       }
     : {};
   return (
     <>
       <header className="ops-header">
         <div>
-          <p className="ops-kicker">Admin workspace</p>
+          <p className="ops-kicker">
+            {superAdmin ? 'Super admin' : 'Admin'} workspace
+          </p>
           <h1>Operations</h1>
         </div>
-        <Link className="button button-secondary ops-exit" to="/account">
-          Exit
-        </Link>
+        <div className="ops-header-actions">
+          <Link className="button button-primary ops-exit" to="/hosting">
+            + Create a trip
+          </Link>
+          <Link className="button button-secondary ops-exit" to="/account">
+            Exit
+          </Link>
+        </div>
       </header>
       <div className="ops-tabs" role="tablist" aria-label="Admin sections">
-        {tabs.map(([key, label]) => (
+        {visibleTabs.map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -95,7 +110,7 @@ function Operations() {
       <section className="ops-body" role="tabpanel" aria-label={tab}>
         {tab === 'overview' && <OverviewTab result={overview} />}
         {tab === 'pipeline' && <PipelineTab />}
-        {tab === 'approvals' && <ApprovalsTab overview={overview.data} />}
+        {tab === 'approvals' && <ApprovalsTab queue={queue.data} />}
         {tab === 'hosts' && <HostsTab />}
         {tab === 'users' && <UsersTab />}
         {tab === 'bookings' && <BookingsTab />}
@@ -312,8 +327,59 @@ function OverviewTab({
     ['onboardedOrLive', 'Curator onboarded or live'],
   ];
   const tracker = data.pipeline.tracker;
+  const accounts = data.accounts;
+  const signupMax = Math.max(1, ...accounts.signups.map((d) => d.accounts));
   return (
     <>
+      <h2 className="ops-section-title">Accounts</h2>
+      <div className="ops-metrics">
+        <Metric
+          label="Accounts created"
+          value={accounts.total}
+          note={`${accounts.last24Hours} today · ${accounts.last7Days} this week`}
+        />
+        <Metric
+          label="Signed up with phone"
+          value={accounts.withPhone}
+          note={`${accounts.withEmail} with email`}
+        />
+        <Metric
+          label="Staff"
+          value={accounts.admins + accounts.supers}
+          note={`${accounts.supers} super · ${accounts.admins} admin`}
+        />
+        <Metric
+          label="Reels"
+          value={data.reels.live}
+          note={`${data.reels.pending} waiting for review`}
+        />
+      </div>
+      <div className="ops-panel">
+        <div className="ops-panel-head">
+          <h2>New accounts, last 14 days</h2>
+          <Link to="/admin?tab=users">See everyone</Link>
+        </div>
+        <div
+          className="ops-chart"
+          role="img"
+          aria-label={accounts.signups
+            .map((d) => `${formatDate(d.day)}: ${d.accounts}`)
+            .join(', ')}
+        >
+          {accounts.signups.map((day) => (
+            <div
+              key={day.day}
+              className="ops-chart-col"
+              title={`${formatDate(day.day)}: ${day.accounts}`}
+            >
+              <span>{day.accounts || ''}</span>
+              <i style={{ height: `${(day.accounts / signupMax) * 100}%` }} />
+              <small>{day.day.slice(8)}</small>
+            </div>
+          ))}
+        </div>
+      </div>
+      <h2 className="ops-section-title">Operations</h2>
       <div className="ops-metrics">
         <Metric
           label="Bookings (30 days)"
@@ -549,8 +615,7 @@ function LeadRow({ lead }: { lead: Lead }) {
 
 /* ------------------------------------------------------------- approvals */
 
-function ApprovalsTab({ overview }: { overview?: Overview }) {
-  const queue = overview?.queue;
+function ApprovalsTab({ queue }: { queue?: Queue }) {
   return (
     <>
       <div className="ops-metrics">
@@ -688,10 +753,15 @@ function UsersTab() {
             <div className="ops-row-main">
               <strong>{user.displayName}</strong>
               <span>
-                {user.email ?? (user.isDemo ? 'Test account' : 'No email')}
+                {[user.phone, user.email].filter(Boolean).join(' · ') ||
+                  (user.isDemo ? 'Test account' : 'No contact')}
               </span>
               <span className="ops-row-meta">
                 {[
+                  `Joined ${formatDate(user.createdAt)}`,
+                  user.lastSignInAt
+                    ? `Last sign-in ${formatDate(user.lastSignInAt)}`
+                    : '',
                   ...user.roles.map(humanise),
                   user.hostStatus ? `Host: ${humanise(user.hostStatus)}` : '',
                   `${user.bookings} bookings`,
@@ -1296,7 +1366,20 @@ function UserDetail({ id }: { id: string }) {
         <div>
           <h1>{person.displayName}</h1>
           <p className="ops-muted">
-            {person.email ?? (person.isDemo ? 'Test account' : 'No email')}
+            {[person.phone, person.email].filter(Boolean).join(' · ') ||
+              (person.isDemo ? 'Test account' : 'No contact')}
+            {' · Signs in with '}
+            {person.signInMethods.length
+              ? person.signInMethods
+                  .map((m) =>
+                    m === 'password'
+                      ? 'email + password'
+                      : m === 'phone'
+                        ? 'phone code'
+                        : 'email code',
+                  )
+                  .join(', ')
+              : 'test sign-in'}
           </p>
         </div>
         <Badge tone={statusTone(person.status)}>
@@ -1320,7 +1403,7 @@ function UserDetail({ id }: { id: string }) {
         <Metric label="Bookings" value={person.bookings.length} />
       </div>
       <p className="ops-muted ops-hint">
-        Admin access is granted on the server with{' '}
+        Admin and super access are granted on the server with{' '}
         <code>npm run admin -- grant --email=…</code>, so it never depends on
         the app alone.
       </p>

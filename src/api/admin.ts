@@ -115,6 +115,18 @@ export type Overview = {
     byArea: { area: string; bookings: number }[];
   };
   people: { active: number; newLast30Days: number };
+  accounts: {
+    total: number;
+    last24Hours: number;
+    last7Days: number;
+    suspended: number;
+    withEmail: number;
+    withPhone: number;
+    admins: number;
+    supers: number;
+    signups: { day: string; accounts: number }[];
+  };
+  reels: { live: number; pending: number };
   hosts: { active: number; expiringSoon: number };
   listings: { published: number; drafts: number };
   community: { published: number };
@@ -129,6 +141,9 @@ export type AdminUser = {
   id: string;
   displayName: string;
   email: string | null;
+  phone: string | null;
+  signInMethods: string[];
+  lastSignInAt: string | null;
   status: string;
   isDemo: boolean;
   createdAt: string;
@@ -155,6 +170,13 @@ export type AdminUserDetail = AdminUser & {
     startsAt: string;
   }[];
   activity: { action: string; entityType: string; createdAt: string }[];
+};
+
+export type Queue = {
+  hosts: number;
+  experiences: number;
+  media: number;
+  followUpsDue: number;
 };
 
 export type AdminBooking = {
