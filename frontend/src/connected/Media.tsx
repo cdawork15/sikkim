@@ -1,9 +1,9 @@
 import { usePlaybackPreferences } from '../hooks/usePlaybackPreferences';
 import { mediaUrl } from '../api/media';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Link,
-  useLocation,
   useNavigate,
   useParams,
   useSearchParams,
@@ -110,6 +110,11 @@ function CommunityReelCard({
           </Link>
         )}
       </div>
+      {active && (
+        <aside className="reel-action-rail" aria-label="Reel actions">
+          <ReelUploadButton />
+        </aside>
+      )}
     </article>
   );
 }
@@ -193,6 +198,7 @@ function ReelCard({
           >
             <Icon name="share" size={26} />
           </button>
+          <ReelUploadButton />
           {shareNotice && <span role="status">{shareNotice}</span>}
         </aside>
       )}
@@ -265,7 +271,6 @@ export function Reels() {
           </Link>
           <Link to="/explore?view=list">Browse all</Link>
         </nav>
-        <ShareReelButton />
         <span className="reel-counter">
           {rows.length ? `${index + 1} / ${rows.length}` : ''}
         </span>
@@ -640,23 +645,29 @@ export function ExperienceGallery({
   );
 }
 
-/** Explore's "+ Share a reel": choose Camera or Photos right here. */
-function ShareReelButton() {
+/**
+ * Icon in the reel action rail, under Share: post your own reel from the
+ * Camera or Photos. The choice panel is portalled so rail styles don't apply.
+ */
+function ReelUploadButton() {
   const { user } = useSession();
   const navigate = useNavigate();
-  const { pathname, search } = useLocation();
   const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => setOpen(false), [pathname, search]);
+  const [place, setPlace] = useState<{ right: number; bottom: number }>();
+  const button = useRef<HTMLButtonElement>(null);
+  const sheet = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
     const outside = (event: PointerEvent) => {
-      // The in-page camera is rendered inside the box, so it stays open.
-      if (!box.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (!sheet.current?.contains(target) && !button.current?.contains(target))
+        setOpen(false);
     };
     const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !document.querySelector('.camera-dialog'))
-        setOpen(false);
+      if (event.key !== 'Escape' || document.querySelector('.camera-dialog'))
+        return;
+      setOpen(false);
+      button.current?.focus();
     };
     document.addEventListener('pointerdown', outside);
     document.addEventListener('keydown', escape);
@@ -668,36 +679,56 @@ function ShareReelButton() {
   if (!user)
     return (
       <Link
-        className="reel-share-link"
+        className="reel-upload-button"
         to="/welcome?next=/reels/new"
-        aria-label="Share a reel"
+        aria-label="Share your reel"
+        title="Share your reel"
       >
-        + Share<span className="reel-upload-more"> a reel</span>
+        <Icon name="create" size={26} />
       </Link>
     );
   return (
-    <div className="reel-upload" ref={box}>
+    <>
       <button
+        ref={button}
         type="button"
-        className="reel-share-link"
+        className="reel-upload-button"
+        aria-label="Share your reel"
+        title="Share your reel"
         aria-expanded={open}
         aria-controls="reel-upload-options"
-        aria-label="Share a reel"
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          const box = button.current!.getBoundingClientRect();
+          // Open beside the icon, lined up with its bottom edge.
+          setPlace({
+            right: window.innerWidth - box.left + 10,
+            bottom: window.innerHeight - box.bottom,
+          });
+          setOpen(!open);
+        }}
       >
-        + Share<span className="reel-upload-more"> a reel</span>
+        <Icon name="create" size={26} />
       </button>
-      {open && (
-        <div id="reel-upload-options" className="reel-upload-sheet">
-          <p>Share a reel from</p>
-          <ReelSourcePicker
-            onPick={(clip) => {
-              holdReelClip(clip);
-              navigate('/reels/new');
-            }}
-          />
-        </div>
-      )}
-    </div>
+      {open &&
+        createPortal(
+          <div
+            ref={sheet}
+            id="reel-upload-options"
+            className="reel-upload-sheet"
+            role="group"
+            aria-label="Share your reel from"
+            style={place}
+          >
+            <p>Share your reel from</p>
+            <ReelSourcePicker
+              onPick={(clip) => {
+                holdReelClip(clip);
+                navigate('/reels/new');
+              }}
+            />
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
