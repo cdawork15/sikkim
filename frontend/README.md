@@ -18,7 +18,7 @@ React 19 · TypeScript · Vite · React Router. A mobile-first web app for disco
 | Host workspace               | `/hosting`, listings, dates, media, stories                                                                                                                                                                                        | API                             |
 | Review                       | `/review`, `/review/hosts/:id`, `/review/experiences/:id`, `/review/media`                                                                                                                                                         | API, admins only                |
 | **Operations (admin + CRM)** | `/admin?tab=overview\|pipeline\|approvals\|hosts\|users\|bookings`, `/admin/leads/new`, `/admin/leads/:id`, `/admin/users/:id`                                                                                                     | API, admins only                |
-| Reels                        | `/explore` (experience + traveller reels), `/reels/new` (share a reel)                                                                                                                                                             | API, reviewed by admins         |
+| Reels                        | `/explore` (experience + traveller reels), `/reels/new` (share a reel: **Camera** or **Photos**, also offered straight from Explore's “+ Share a reel”)                                                                            | API, reviewed by admins         |
 
 The Operations workspace follows prototype screen S20: segmented tabs, metric tiles and red progress bars on the black theme.
 
@@ -79,6 +79,8 @@ npm run format:check
 Paid checkout, real email/SMS delivery of sign-in codes, and Community chat and joining are not built yet. Reloading the page signs you out, because tokens are kept in memory only.
 
 ## Changelog
+
+- **2026-11-21** Share a reel from **Camera** or **Photos**, right from Explore. Phones open their own camera app (`capture`); laptops record in the page (up to 60 s, `MediaRecorder`). iPhone `.mov` videos are accepted.
 
 - **2026-11-21** Password sign-in by email or mobile number; new profile section **Password & sign-in** to add or change a password (the one-time code keeps working).
 

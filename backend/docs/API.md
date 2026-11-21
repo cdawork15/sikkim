@@ -27,6 +27,10 @@ Base path: `/v1`. Private requests need `Authorization: Bearer <token>`.
 
 Sign in with a one-time code (`POST /auth/otp/request`, then `/auth/otp/verify`) or a password. Log in with `password` plus **either** `email` or `phone` (local numbers get the default country code). Register with `displayName`, `email`, `password`; an email that already signs in with a code returns 409. Any signed-in account can add a password with `PUT /me/password` `{ newPassword }`; changing it also needs `currentPassword`, and signs out the account's other sessions. `GET /me` reports `hasPassword`. Passwords are 8–128 characters. Keep tokens in memory. Sessions expire after 30 minutes; refresh rotates the token, up to 24 hours from sign-in. Reloading the frontend requires login again.
 
+## Uploading a reel
+
+`POST /me/media` with `purpose: public_content` and `contentType` `video/mp4`, `video/webm` or `video/quicktime` (phone camera .mov), up to 50 MB and 60 seconds. `PUT` the file to `uploadUrl`, poll `GET /me/media/:id` until `ready`, then `POST /me/reels` with `assetId`. Every video is transcoded to H.264 MP4 with metadata removed. If the app can't read the length first, send a caption cue up to 60 s; the server trims it to the real length.
+
 ## Your profile
 
 `GET /me` returns the signed-in person's profile: name, language, roles, interests, preferences, their own sign-in `email` and `phone` (either may be `null`), `createdAt`, and `summary` with `bookings`, `saved` and `reels` counts. `PATCH /me/preferences` accepts any subset of fields, so a screen can save only what it shows.

@@ -8,6 +8,7 @@ export const contentTypes = [
   'image/webp',
   'video/mp4',
   'video/webm',
+  'video/quicktime',
 ] as const;
 export type ContentType = (typeof contentTypes)[number];
 export const variantNames = ['image', 'video', 'poster', 'captions'] as const;
@@ -122,6 +123,43 @@ const captionTiming = new RegExp(
     captionTimestamp +
     '(?: line:(?:100|[0-9]{1,2})%)?$',
 );
+
+/**
+ * Phones can't always report a video's length before upload (for example HEVC
+ * .mov files on desktop browsers), so the app may send a cue that runs past the
+ * end. Trim cues to the real length once it is known; drop cues that start after it.
+ */
+export function fitCaptions(value: string, duration: number) {
+  const limit = Math.min(60, duration);
+  const stamp = (seconds: number) => {
+    const ms = Math.round(seconds * 1000);
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    const pad = (n: number, width = 2) => String(n).padStart(width, '0');
+    return `${pad(h)}:${pad(m)}:${pad(s)}.${pad(ms % 1000, 3)}`;
+  };
+  const seconds = (text: string) => {
+    const parts = text.split(':').map(Number);
+    return parts.reduce((total, part) => total * 60 + part, 0);
+  };
+  const input = value.replace(/\r\n/g, '\n').trim();
+  if (!input.startsWith('WEBVTT\n\n')) return value;
+  const blocks = input
+    .slice(8)
+    .split(/\n\n+/)
+    .flatMap((block) => {
+      const [timing = '', ...lines] = block.split('\n');
+      const match = timing.match(/^([\d:.]+) --> ([\d:.]+)$/);
+      if (!match) return [block];
+      const start = seconds(match[1]!);
+      const end = seconds(match[2]!);
+      if (start >= limit) return [];
+      if (end <= limit) return [block];
+      return [[`${match[1]} --> ${stamp(limit)}`, ...lines].join('\n')];
+    });
+  return blocks.length ? `WEBVTT\n\n${blocks.join('\n\n')}\n` : value;
+}
 
 // A deliberately small WebVTT subset: timed, plain-text English descriptions.
 // Reject styling, embedded tags and external references instead of rendering

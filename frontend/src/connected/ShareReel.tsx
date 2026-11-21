@@ -1,9 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAction, useApi, useResource } from '../api/react';
 import type { Experience } from '../api/types';
 import { Icon } from '../components/Icon';
 import { ErrorNotice, RequireAccount } from './shared';
+import {
+  reelContentType,
+  reelLimits,
+  ReelSourcePicker,
+  takeReelClip,
+  type ReelClip,
+} from './ReelCapture';
 
 type MyReel = {
   id: string;
@@ -21,20 +28,24 @@ const statusText: Record<MyReel['status'], string> = {
   not_published: 'Not published',
 };
 
-/** Reads a video's length in the browser, for the caption timing. */
+/**
+ * Reads a video's length in the browser, for the caption timing. Some phone
+ * formats (HEVC .mov on desktop browsers) can't be read here; the server then
+ * measures the video and trims the caption to fit.
+ */
 function videoDuration(file: File) {
-  return new Promise<number>((resolve, reject) => {
+  return new Promise<number | null>((resolve) => {
     const video = document.createElement('video');
     const url = URL.createObjectURL(file);
+    const done = (value: number | null) => {
+      URL.revokeObjectURL(url);
+      resolve(value);
+    };
     video.preload = 'metadata';
-    video.onloadedmetadata = () => {
-      URL.revokeObjectURL(url);
-      resolve(video.duration);
-    };
-    video.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('This video could not be read. Try an MP4 file.'));
-    };
+    video.onloadedmetadata = () =>
+      done(Number.isFinite(video.duration) ? video.duration : null);
+    video.onerror = () => done(null);
+    setTimeout(() => done(null), 5000);
     video.src = url;
   });
 }
@@ -64,6 +75,15 @@ function ShareReelForm() {
   const mine = useResource<MyReel[]>('/me/reels', true);
   const experiences = useResource<Experience[]>('/experiences?limit=50');
   const [progress, setProgress] = useState('');
+  // A clip picked on Explore arrives here; otherwise pick one on this page.
+  const [clip, setClip] = useState<ReelClip | null>(() => takeReelClip());
+  const [preview, setPreview] = useState<string>();
+  useEffect(() => {
+    if (!clip) return setPreview(undefined);
+    const url = URL.createObjectURL(clip.file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [clip]);
   return (
     <>
       <Link className="ops-back" to="/explore">
@@ -71,8 +91,9 @@ function ShareReelForm() {
       </Link>
       <h1>Share a reel</h1>
       <p className="ops-muted">
-        A short vertical video of Sikkim, up to 60 seconds and 50 MB. Our team
-        checks every reel before it appears in Explore.
+        Record with your camera or pick a video from your photos: up to 60
+        seconds and 50 MB. Our team checks every reel before it appears in
+        Explore.
       </p>
       <form
         className="ops-panel ops-form share-reel-form"
@@ -81,17 +102,17 @@ function ShareReelForm() {
           const form = event.currentTarget;
           const data = new FormData(form);
           void action.run(async () => {
-            const file = data.get('video') as File;
-            if (!file?.size) throw new Error('Choose a video.');
-            if (!['video/mp4', 'video/webm'].includes(file.type))
-              throw new Error('Use an MP4 or WebM video.');
-            if (file.size > 50 * 1024 * 1024)
+            if (!clip) throw new Error('Record or choose a video first.');
+            const file = clip.file;
+            const contentType = reelContentType(file);
+            if (!contentType) throw new Error('Use an MP4, MOV or WebM video.');
+            if (file.size > reelLimits.bytes)
               throw new Error('Videos must be 50 MB or smaller.');
             const caption = String(data.get('caption') ?? '').trim();
             const place = String(data.get('place') ?? '').trim();
             setProgress('Reading video…');
-            const duration = await videoDuration(file);
-            if (duration > 60)
+            const duration = clip.duration ?? (await videoDuration(file));
+            if (duration !== null && duration > reelLimits.seconds + 0.5)
               throw new Error('Keep reels to 60 seconds or less.');
             setProgress('Uploading…');
             const intent = await api.request<UploadIntent>('/me/media', {
@@ -99,13 +120,13 @@ function ShareReelForm() {
               private: true,
               body: {
                 purpose: 'public_content',
-                contentType: file.type,
+                contentType,
                 bytes: file.size,
                 author: String(data.get('author') ?? '').trim(),
                 permissionNote: 'Shared by the person who filmed it.',
                 place: place || 'Sikkim',
                 altText: caption || 'Reel from Sikkim',
-                captions: `WEBVTT\n\n00:00:00.000 --> ${stamp(duration - 0.05)}\n${caption || place || 'Sikkim'}\n`,
+                captions: `WEBVTT\n\n00:00:00.000 --> ${stamp((duration ?? reelLimits.seconds) - 0.05)}\n${caption || place || 'Sikkim'}\n`,
               },
             });
             const path = intent.data.uploadUrl?.replace(/^\/v1/, '');
@@ -145,20 +166,37 @@ function ShareReelForm() {
               },
             });
             form.reset();
+            setClip(null);
             setProgress('');
             mine.reload();
           }, 'Thanks! Your reel is waiting for review.');
         }}
       >
-        <label className="ops-wide">
-          Video
-          <input
-            name="video"
-            type="file"
-            accept="video/mp4,video/webm"
-            required
-          />
-        </label>
+        <fieldset className="ops-wide reel-video-field">
+          <legend>Video</legend>
+          {clip && preview ? (
+            <div className="reel-picked">
+              <video
+                src={preview}
+                controls
+                playsInline
+                muted
+                aria-label="Selected video"
+              />
+              <div>
+                <strong>{clip.file.name}</strong>
+                <span>
+                  {(clip.file.size / 1024 / 1024).toFixed(1)} MB
+                  {clip.duration ? ` · ${Math.round(clip.duration)} s` : ''}
+                </span>
+                <p>Change video:</p>
+                <ReelSourcePicker onPick={setClip} compact />
+              </div>
+            </div>
+          ) : (
+            <ReelSourcePicker onPick={setClip} />
+          )}
+        </fieldset>
         <label className="ops-wide">
           Caption
           <input

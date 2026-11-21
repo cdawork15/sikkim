@@ -139,6 +139,8 @@ test/integration/   Tests against the disposable sikkim_test database
 
 ## Changelog
 
+- **2026-11-21** Phone camera videos: `video/quicktime` (.mov) uploads accepted; timed metadata tracks from phones are allowed but never copied (only one picture and one sound track are transcoded, metadata stripped). Captions that run past the real video length are trimmed to fit. Migration `1770000011000_camera-videos`.
+
 - **2026-11-21** Every account can sign in with a one-time code **or** a password: `PUT /v1/me/password` to add or change one, password login by email or mobile, `hasPassword` on `/me`, `npm run admin -- set-password`. Fixed: password sign-up could create a second account for an email already used with a code. Migration `1770000010000_password-for-everyone`.
 
 - **2026-11-20** `GET /v1/me` (and the session user) also returns the owner's own `email`, `phone`, `createdAt` and `summary` (`bookings`, `saved`, `reels` counts) for the profile page.

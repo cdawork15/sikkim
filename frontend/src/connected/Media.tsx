@@ -1,7 +1,13 @@
 import { usePlaybackPreferences } from '../hooks/usePlaybackPreferences';
 import { mediaUrl } from '../api/media';
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from 'react-router-dom';
 import { useAction, useApi, useResource, useSession } from '../api/react';
 import type { Experience, MediaItem } from '../api/types';
 import { Icon } from '../components/Icon';
@@ -16,6 +22,7 @@ import {
 } from './shared';
 import { ExperienceActions } from './ExperienceActions';
 import { MediaPlayer } from './MediaPlayer';
+import { holdReelClip, ReelSourcePicker } from './ReelCapture';
 
 type Reel = { experience: Experience; media: MediaItem };
 type CommunityReel = {
@@ -258,9 +265,7 @@ export function Reels() {
           </Link>
           <Link to="/explore?view=list">Browse all</Link>
         </nav>
-        <Link className="reel-share-link" to="/reels/new">
-          + Share a reel
-        </Link>
+        <ShareReelButton />
         <span className="reel-counter">
           {rows.length ? `${index + 1} / ${rows.length}` : ''}
         </span>
@@ -631,6 +636,68 @@ export function ExperienceGallery({
       >
         <Icon name="info" size={17} />
       </Link>
+    </div>
+  );
+}
+
+/** Explore's "+ Share a reel": choose Camera or Photos right here. */
+function ShareReelButton() {
+  const { user } = useSession();
+  const navigate = useNavigate();
+  const { pathname, search } = useLocation();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => setOpen(false), [pathname, search]);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: PointerEvent) => {
+      // The in-page camera is rendered inside the box, so it stays open.
+      if (!box.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !document.querySelector('.camera-dialog'))
+        setOpen(false);
+    };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [open]);
+  if (!user)
+    return (
+      <Link
+        className="reel-share-link"
+        to="/welcome?next=/reels/new"
+        aria-label="Share a reel"
+      >
+        + Share<span className="reel-upload-more"> a reel</span>
+      </Link>
+    );
+  return (
+    <div className="reel-upload" ref={box}>
+      <button
+        type="button"
+        className="reel-share-link"
+        aria-expanded={open}
+        aria-controls="reel-upload-options"
+        aria-label="Share a reel"
+        onClick={() => setOpen(!open)}
+      >
+        + Share<span className="reel-upload-more"> a reel</span>
+      </button>
+      {open && (
+        <div id="reel-upload-options" className="reel-upload-sheet">
+          <p>Share a reel from</p>
+          <ReelSourcePicker
+            onPick={(clip) => {
+              holdReelClip(clip);
+              navigate('/reels/new');
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

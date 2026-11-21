@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import {
+  fitCaptions,
   validateCaptions,
   mediaInvalid,
   variantFiles,
@@ -101,6 +102,10 @@ export function localMediaStorage(root: string) {
           header.toString('ascii', 0, 4) === 'RIFF' &&
           header.toString('ascii', 8, 12) === 'WEBP',
         'video/mp4': header.toString('ascii', 4, 8) === 'ftyp',
+        // QuickTime: modern files start with ftyp; older ones with a top-level atom.
+        'video/quicktime': ['ftyp', 'moov', 'mdat', 'wide', 'free'].includes(
+          header.toString('ascii', 4, 8),
+        ),
         'video/webm': header
           .subarray(0, 4)
           .equals(Buffer.from([26, 69, 223, 163])),
@@ -131,12 +136,23 @@ export function localMediaStorage(root: string) {
         (stream) => stream.codec_type === 'video',
       );
       const image = type.startsWith('image/');
+      const audio = probe.streams.filter(
+        (stream) => stream.codec_type === 'audio',
+      );
+      // Phone recordings carry timed metadata tracks (location, orientation).
+      // They are allowed for videos but never copied: only one picture and one
+      // sound track are transcoded, and all metadata is stripped.
+      const metadata = probe.streams.filter(
+        (stream) => stream.codec_type === 'data',
+      );
       if (
         video.length !== 1 ||
-        probe.streams.length > (image ? 1 : 2) ||
-        probe.streams.some(
-          (stream) => !['video', 'audio'].includes(stream.codec_type),
-        )
+        (image
+          ? probe.streams.length !== 1
+          : audio.length > 1 ||
+            metadata.length > 8 ||
+            video.length + audio.length + metadata.length !==
+              probe.streams.length)
       ) {
         throw mediaInvalid('Use a single image or video with optional audio.');
       }
@@ -240,7 +256,7 @@ export function localMediaStorage(root: string) {
         ]);
         await writeFile(
           file(id, variantFiles.captions),
-          validateCaptions(captions, duration),
+          validateCaptions(fitCaptions(captions, duration), duration),
           {
             mode: 0o600,
           },

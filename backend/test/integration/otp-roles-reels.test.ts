@@ -580,4 +580,76 @@ test('OTP sign-in, account types and community reels', async (t) => {
       );
     },
   );
+
+  await t.test(
+    'phone camera .mov files with metadata tracks are accepted',
+    async () => {
+      // Like an iPhone recording: QuickTime, picture + sound + a timed data track.
+      const moviePath = join(directory, 'camera.mov');
+      await promisify(execFile)('ffmpeg', [
+        '-nostdin',
+        '-v',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        'color=c=blue:s=64x96:d=1',
+        '-f',
+        'lavfi',
+        '-i',
+        'anullsrc=r=44100:cl=mono',
+        '-t',
+        '1',
+        '-c:v',
+        'libx264',
+        '-pix_fmt',
+        'yuv420p',
+        '-c:a',
+        'aac',
+        '-timecode',
+        '00:00:00:00',
+        moviePath,
+      ]);
+      const movie = await readFile(moviePath);
+      const intent = await call('POST', '/me/media', traveller, {
+        purpose: 'public_content',
+        contentType: 'video/quicktime',
+        bytes: movie.length,
+        author: 'Traveller T',
+        permissionNote: 'Recorded on my phone.',
+        place: 'Lachung',
+        altText: 'Blue test frame',
+        // The browser could not read the length, so the cue runs long.
+        captions: 'WEBVTT\n\n00:00:00.000 --> 00:01:00.000\nLachung.\n',
+      });
+      assert.equal(intent.statusCode, 201, intent.body);
+      const asset = intent.json().data;
+      const put = await app.inject({
+        method: 'PUT',
+        url: asset.uploadUrl,
+        headers: {
+          ...traveller.headers,
+          'content-type': 'application/octet-stream',
+        },
+        payload: movie,
+      });
+      assert.equal(put.statusCode, 202, put.body);
+      let ready = asset;
+      for (
+        let i = 0;
+        i < 100 && !['ready', 'failed'].includes(ready.state);
+        i += 1
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        ready = (await call('GET', `/me/media/${asset.id}`, traveller)).json()
+          .data;
+      }
+      assert.equal(ready.state, 'ready', JSON.stringify(ready));
+      const shared = await call('POST', '/me/reels', traveller, {
+        assetId: asset.id,
+        caption: 'Morning in Lachung',
+      });
+      assert.equal(shared.statusCode, 201, shared.body);
+    },
+  );
 });

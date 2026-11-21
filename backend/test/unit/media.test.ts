@@ -6,6 +6,7 @@ import { testEnvironment } from '../helpers.js';
 import {
   signature,
   verifySignature,
+  fitCaptions,
   validateCaptions,
   validateUrl,
 } from '../../src/media/model.js';
@@ -145,4 +146,19 @@ test('the shared-network request allowance stays bounded', () => {
       loadConfig({ ...testEnvironment, REQUESTS_PER_MINUTE: value }),
     );
   }
+});
+
+test('captions are trimmed to the real video length', () => {
+  const long = 'WEBVTT\n\n00:00:00.000 --> 00:01:00.000\nLachung.\n';
+  const fitted = fitCaptions(long, 3.2);
+  assert.equal(fitted, 'WEBVTT\n\n00:00:00.000 --> 00:00:03.200\nLachung.\n');
+  assert.doesNotThrow(() => validateCaptions(fitted, 3.2));
+  const two =
+    'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nOne.\n\n00:00:05.000 --> 00:00:08.000\nTwo.\n';
+  assert.equal(
+    fitCaptions(two, 4),
+    'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nOne.\n',
+  );
+  const fits = 'WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nShort.\n';
+  assert.equal(fitCaptions(fits, 10), fits);
 });

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import pg from 'pg';
 import type { Config } from '../config.js';
 
-export const latestMigration = '1770000010000_password-for-everyone';
+export const latestMigration = '1770000011000_camera-videos';
 
 export function poolOptions(
   config: Config,
