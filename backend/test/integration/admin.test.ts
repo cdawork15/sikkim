@@ -8,7 +8,7 @@ import { migrate } from '../../src/db/maintenance.js';
 import { requirePublishableHost } from '../../src/hosts/service.js';
 
 const TABLES = `
-  public.user_reels, public.auth_otp_challenges, public.crm_lead_notes, public.crm_leads, public.community_photos,
+  public.user_reels, public.auth_otp_challenges, public.crm_ai_runs, public.crm_tasks, public.crm_lead_notes, public.crm_leads, public.community_photos,
   public.community_events, public.booking_changes, public.tickets,
   public.bookings, public.seat_holds, public.experience_slots,
   public.story_views, public.saved_items, public.experience_likes,
@@ -155,11 +155,15 @@ test('admin workspace and curator CRM against isolated PostgreSQL', async (t) =>
       const detail = (
         await call('GET', `/admin/leads/${lead.id}`, admin)
       ).json().data;
+      // Automatic playbook entries sit between staff notes; see crm.test.ts.
+      const staffNotes = detail.notes.filter(
+        (n: { kind: string }) => n.kind !== 'automation',
+      );
       assert.deepEqual(
-        detail.notes.map((n: { kind: string }) => n.kind),
+        staffNotes.map((n: { kind: string }) => n.kind),
         ['call', 'stage', 'stage'],
       );
-      assert.match(detail.notes[1].body, /Idea → Contacted/);
+      assert.match(staffNotes[1].body, /Idea → Contacted/);
 
       await call('POST', '/admin/leads', admin, {
         code: 'GTK-05',
@@ -402,7 +406,9 @@ test('admin workspace and curator CRM against isolated PostgreSQL', async (t) =>
         ).count,
         26,
       );
-      assert.equal(overview.pipeline.followUpsDue, 1);
+      // PKG-02's 2020 follow-up was replaced by the onboarding playbook task
+      // when it moved stage, so nothing is overdue.
+      assert.equal(overview.pipeline.followUpsDue, 0);
       assert.equal(overview.bookings.last30Days.total, 0);
     },
   );

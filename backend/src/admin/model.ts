@@ -19,6 +19,8 @@ export const leadVerdicts = [
 ] as const;
 export const siteVisits = ['not_needed', 'pending', 'done'] as const;
 export const noteKinds = ['note', 'call', 'visit', 'message'] as const;
+export const taskStatuses = ['open', 'done', 'cancelled'] as const;
+export type TaskStatus = (typeof taskStatuses)[number];
 export const roleFilters = ['super', 'admin', 'host'] as const;
 export const bookingStatuses = ['confirmed', 'cancelled', 'no_show'] as const;
 
@@ -46,6 +48,13 @@ export type LeadInput = {
   ownerId?: string | null;
   hostId?: string | null;
   nextFollowUp?: string | null;
+  scoreUniqueness?: number | null;
+  scoreStory?: number | null;
+  scoreReadiness?: number | null;
+  scoreAccess?: number | null;
+  scoreSafety?: number | null;
+  scorePhoto?: number | null;
+  expectedMonthlyPaise?: number | null;
 };
 
 export type LeadPatch = LeadInput & { revision: number };
@@ -81,6 +90,13 @@ export const leadColumns = {
   ownerId: 'owner_id',
   hostId: 'host_id',
   nextFollowUp: 'next_follow_up',
+  scoreUniqueness: 'score_uniqueness',
+  scoreStory: 'score_story',
+  scoreReadiness: 'score_readiness',
+  scoreAccess: 'score_access',
+  scoreSafety: 'score_safety',
+  scorePhoto: 'score_photo',
+  expectedMonthlyPaise: 'expected_monthly_paise',
 } as const satisfies Record<keyof LeadInput, string>;
 
 export const stageLabels: Record<LeadStage, string> = {

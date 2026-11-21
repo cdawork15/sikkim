@@ -6,6 +6,7 @@ import {
   useSearchParams,
 } from 'react-router-dom';
 import {
+  assessmentCriteria,
   formatDate,
   formatDateTime,
   humanise,
@@ -28,12 +29,22 @@ import { useAction, useApi, useResource, useSession } from '../api/react';
 import type { CatalogueOptions, HostApplication } from '../api/types';
 import { Icon } from '../components/Icon';
 import { Empty, ErrorNotice, isSuper, Loading, RequireAccount } from './shared';
+import { Badge, Metric, ScoreBadge, stageTone } from './adminParts';
+import {
+  AiBrief,
+  InsightsTab,
+  LeadScorePanel,
+  LeadTasks,
+  TasksTab,
+} from './Crm';
 import './admin.css';
 
 // [key, label, super only]
 const tabs = [
   ['overview', 'Overview', true],
   ['pipeline', 'Pipeline', false],
+  ['tasks', 'Tasks', false],
+  ['insights', 'CRM insights', true],
   ['approvals', 'Approvals', false],
   ['hosts', 'Hosts', false],
   ['users', 'People', true],
@@ -72,6 +83,7 @@ function Operations() {
   const counts: Partial<Record<Tab, number>> = queue.data
     ? {
         pipeline: queue.data.followUpsDue,
+        tasks: queue.data.tasksDue,
         approvals: queue.data.hosts + queue.data.experiences + queue.data.media,
       }
     : {};
@@ -110,6 +122,8 @@ function Operations() {
       <section className="ops-body" role="tabpanel" aria-label={tab}>
         {tab === 'overview' && <OverviewTab result={overview} />}
         {tab === 'pipeline' && <PipelineTab />}
+        {tab === 'tasks' && <TasksTab />}
+        {tab === 'insights' && <InsightsTab />}
         {tab === 'approvals' && <ApprovalsTab queue={queue.data} />}
         {tab === 'hosts' && <HostsTab />}
         {tab === 'users' && <UsersTab />}
@@ -121,42 +135,6 @@ function Operations() {
 
 /* --------------------------------------------------------------- helpers */
 
-function Metric({
-  label,
-  value,
-  note,
-}: {
-  label: string;
-  value: ReactNode;
-  note?: string;
-}) {
-  return (
-    <div className="ops-metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {note && <small>{note}</small>}
-    </div>
-  );
-}
-
-function Badge({
-  tone = 'plain',
-  children,
-}: {
-  tone?: 'plain' | 'ok' | 'warn' | 'red';
-  children: ReactNode;
-}) {
-  return <span className={`ops-badge ${tone}`}>{children}</span>;
-}
-
-const stageTone = (stage: string) =>
-  stage === 'live' || stage === 'agreed' || stage === 'onboarding'
-    ? 'ok'
-    : stage === 'declined'
-      ? 'red'
-      : stage === 'paused'
-        ? 'warn'
-        : 'plain';
 const statusTone = (status: string) =>
   ['approved', 'active', 'confirmed', 'published', 'checked_in'].includes(
     status,
@@ -608,7 +586,10 @@ function LeadRow({ lead }: { lead: Lead }) {
           )}
         </span>
       </div>
-      <Badge tone={stageTone(lead.stage)}>{stageLabels[lead.stage]}</Badge>
+      <span className="ops-row-badges">
+        <ScoreBadge score={lead.score} />
+        <Badge tone={stageTone(lead.stage)}>{stageLabels[lead.stage]}</Badge>
+      </span>
     </Link>
   );
 }
@@ -882,16 +863,24 @@ function ExistingLead({ id }: { id: string }) {
       </header>
       <StageChanger lead={lead} saved={(next) => result.replace(next)} />
       <div className="ops-lead-grid">
+        {/* Remount after each save so the form shows what the server kept
+            (automation and AI ratings can change fields). */}
         <LeadForm
+          key={`form-${lead.revision}`}
           lead={lead}
           saved={(next) => result.replace(next)}
           reload={result.reload}
         />
-        <Notes
-          key={`notes-${lead.revision}-${lead.notes.length}`}
-          lead={lead}
-          reload={result.reload}
-        />
+        <div className="ops-lead-side">
+          <LeadScorePanel lead={lead} />
+          <AiBrief lead={lead} saved={result.reload} />
+          <LeadTasks lead={lead} reload={result.reload} />
+          <Notes
+            key={`notes-${lead.revision}-${lead.notes.length}`}
+            lead={lead}
+            reload={result.reload}
+          />
+        </div>
       </div>
     </>
   );
@@ -968,6 +957,15 @@ function leadBody(form: FormValues, checks: Record<string, boolean>) {
     ownerId: text('ownerId') || null,
     hostId: text('hostId') || null,
     nextFollowUp: text('nextFollowUp') || null,
+    ...Object.fromEntries(
+      assessmentCriteria.map(([field]) => [
+        field,
+        text(field) ? Number(text(field)) : null,
+      ]),
+    ),
+    expectedMonthlyPaise: text('expectedMonthly')
+      ? Math.round(Number(text('expectedMonthly')) * 100)
+      : null,
     ...checks,
   };
 }
@@ -1190,6 +1188,40 @@ function LeadForm({
             </label>
           ))}
         </div>
+        <p className="ops-muted ops-wide">
+          Rate each criterion from 1 (weak) to 5 (excellent). Ratings feed the
+          lead score.
+        </p>
+        {assessmentCriteria.map(([field, , label]) => (
+          <label key={field}>
+            {label}
+            <select name={field} defaultValue={lead?.[field] ?? ''}>
+              <option value="">Not rated</option>
+              {[1, 2, 3, 4, 5].map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+        <label className="ops-wide">
+          Expected monthly booking value (₹)
+          <input
+            name="expectedMonthly"
+            type="number"
+            min={0}
+            max={20000000}
+            step={1}
+            inputMode="numeric"
+            placeholder="e.g. 15000"
+            defaultValue={
+              lead?.expectedMonthlyPaise != null
+                ? Math.round(lead.expectedMonthlyPaise / 100)
+                : ''
+            }
+          />
+        </label>
       </fieldset>
 
       <fieldset>
@@ -1197,7 +1229,9 @@ function LeadForm({
         <label>
           Owner
           <select name="ownerId" defaultValue={lead?.ownerId ?? ''}>
-            <option value="">No owner</option>
+            <option value="">
+              {lead ? 'No owner' : 'Assign automatically'}
+            </option>
             {admins.data?.map((admin) => (
               <option key={admin.id} value={admin.id}>
                 {admin.displayName}

@@ -206,6 +206,7 @@ export function loadConfig(env: Environment = process.env) {
   }
   return {
     media,
+    ai: aiConfig(env),
     requestsPerMinute: +requestLimit,
     mode,
     demoAuth,
@@ -224,6 +225,51 @@ export function loadConfig(env: Environment = process.env) {
     databaseCaFile: env.DB_CA_FILE,
     trustProxy,
     logLevel: mode === 'test' ? 'silent' : 'info',
+  };
+}
+
+// CRM AI assistant. 'disabled' keeps every AI feature off and sends nothing to
+// a model provider; 'anthropic' calls the Claude API with ANTHROPIC_API_KEY.
+export function aiConfig(env: Environment) {
+  const provider = env.AI_PROVIDER ?? 'disabled';
+  if (!['disabled', 'anthropic'].includes(provider)) {
+    throw new ConfigurationError('AI_PROVIDER must be disabled or anthropic');
+  }
+  const limitValue = env.AI_ASSIST_HOURLY_LIMIT ?? '20';
+  if (!/^\d+$/.test(limitValue) || +limitValue < 1 || +limitValue > 1000) {
+    throw new ConfigurationError(
+      'AI_ASSIST_HOURLY_LIMIT must be between 1 and 1000',
+    );
+  }
+  const fallback = env.AI_REFUSAL_FALLBACK ?? 'default';
+  if (!['default', 'off'].includes(fallback)) {
+    throw new ConfigurationError('AI_REFUSAL_FALLBACK must be default or off');
+  }
+  if (provider === 'disabled') {
+    return {
+      provider: 'disabled' as const,
+      model: '',
+      apiKey: '',
+      hourlyLimit: +limitValue,
+      refusalFallback: fallback === 'default',
+    };
+  }
+  const model = env.AI_MODEL?.trim() ?? '';
+  if (!/^[a-z0-9][a-z0-9.:@_-]{1,79}$/.test(model)) {
+    throw new ConfigurationError('AI_MODEL must name a Claude model ID');
+  }
+  const apiKey = env.ANTHROPIC_API_KEY?.trim() ?? '';
+  if (apiKey.length < 20) {
+    throw new ConfigurationError(
+      'ANTHROPIC_API_KEY is required when AI_PROVIDER=anthropic',
+    );
+  }
+  return {
+    provider: 'anthropic' as const,
+    model,
+    apiKey,
+    hourlyLimit: +limitValue,
+    refusalFallback: fallback === 'default',
   };
 }
 

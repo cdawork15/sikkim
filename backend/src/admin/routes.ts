@@ -9,10 +9,14 @@ import {
   leadVerdicts,
   noteKinds,
   siteVisits,
+  taskStatuses,
   type LeadInput,
   type LeadPatch,
   type LeadStage,
 } from './model.js';
+import type { LeadAssistant } from '../ai/assistant.js';
+import { crmService } from './crm.js';
+import { assessmentCriteria } from './scoring.js';
 import { adminService } from './service.js';
 
 const object = (
@@ -27,6 +31,9 @@ const cursor = { type: 'string', minLength: 1, maxLength: 200 };
 const search = { type: 'string', minLength: 1, maxLength: 120 };
 const idParams = object({ id: uuid }, ['id']);
 const revision = { type: 'integer', minimum: 1, maximum: 2147483646 };
+const rating = {
+  anyOf: [{ type: 'integer', minimum: 1, maximum: 5 }, { type: 'null' }],
+};
 
 const leadProperties = {
   code: { anyOf: [{ type: 'string', maxLength: 16 }, { type: 'null' }] },
@@ -54,14 +61,30 @@ const leadProperties = {
   nextFollowUp: {
     anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
   },
+  ...Object.fromEntries(assessmentCriteria.map(([, field]) => [field, rating])),
+  expectedMonthlyPaise: {
+    anyOf: [
+      { type: 'integer', minimum: 0, maximum: 2000000000 },
+      { type: 'null' },
+    ],
+  },
+};
+const taskProperties = {
+  title: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' },
+  dueOn: { anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }] },
+  assigneeId: nullableUuid,
 };
 
 export function registerAdmin(
   app: FastifyInstance,
   database: Database,
   config: Config,
+  assistant: LeadAssistant | null = null,
 ) {
-  const service = adminService(database, config);
+  const service = adminService(database, config, {
+    aiEnabled: assistant !== null,
+  });
+  const crm = crmService(database, config, assistant);
   const token = (headers: { authorization?: string | undefined }) =>
     bearerToken(headers.authorization);
 
@@ -170,6 +193,130 @@ export function registerAdmin(
           token(req.headers),
           req.params.id,
           req.body,
+          req.id,
+        ),
+      }),
+  );
+
+  // Follow-up tasks (staff).
+  app.get<{
+    Querystring: {
+      scope?: 'mine' | 'everyone';
+      status?: (typeof taskStatuses)[number];
+    };
+  }>(
+    '/v1/admin/tasks',
+    {
+      schema: {
+        querystring: object({
+          scope: { type: 'string', enum: ['mine', 'everyone'] },
+          status: { type: 'string', enum: taskStatuses },
+        }),
+      },
+    },
+    async (req) =>
+      crm.listTasks(token(req.headers), {
+        scope: req.query.scope ?? 'mine',
+        status: req.query.status ?? 'open',
+      }),
+  );
+  app.post<{
+    Params: { id: string };
+    Body: { title: string; dueOn?: string | null; assigneeId?: string | null };
+  }>(
+    '/v1/admin/leads/:id/tasks',
+    {
+      schema: {
+        querystring: noQuery,
+        params: idParams,
+        body: object(taskProperties, ['title']),
+      },
+    },
+    async (req, reply) =>
+      reply.code(201).send({
+        data: await crm.createTask(
+          token(req.headers),
+          req.params.id,
+          req.body,
+          req.id,
+        ),
+      }),
+  );
+  app.patch<{
+    Params: { id: string };
+    Body: {
+      status?: (typeof taskStatuses)[number];
+      title?: string;
+      dueOn?: string | null;
+      assigneeId?: string | null;
+    };
+  }>(
+    '/v1/admin/tasks/:id',
+    {
+      schema: {
+        querystring: noQuery,
+        params: idParams,
+        body: {
+          ...object({
+            ...taskProperties,
+            status: { type: 'string', enum: taskStatuses },
+          }),
+          minProperties: 1,
+        },
+      },
+    },
+    async (req) => ({
+      data: await crm.updateTask(
+        token(req.headers),
+        req.params.id,
+        req.body,
+        req.id,
+      ),
+    }),
+  );
+
+  // Integrations: calendar file of my open tasks, spreadsheet of every lead.
+  app.get(
+    '/v1/admin/crm/tasks.ics',
+    { schema: { querystring: noQuery } },
+    async (req, reply) =>
+      reply
+        .type('text/calendar; charset=utf-8')
+        .header('content-disposition', 'attachment; filename="crm-tasks.ics"')
+        .send(await crm.calendar(token(req.headers))),
+  );
+  app.get(
+    '/v1/admin/crm/leads.csv',
+    { schema: { querystring: noQuery } },
+    async (req, reply) =>
+      reply
+        .type('text/csv; charset=utf-8')
+        .header(
+          'content-disposition',
+          'attachment; filename="curator-leads.csv"',
+        )
+        .send(await crm.exportLeads(token(req.headers), req.id)),
+  );
+
+  // Reporting and forecasting (super).
+  app.get(
+    '/v1/admin/crm/report',
+    { schema: { querystring: noQuery } },
+    async (req) => ({ data: await crm.report(token(req.headers)) }),
+  );
+
+  // AI brief for one lead (staff). Also capped per person per hour.
+  app.post<{ Params: { id: string } }>(
+    '/v1/admin/leads/:id/ai-brief',
+    {
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+      schema: { querystring: noQuery, params: idParams, body: object({}) },
+    },
+    async (req, reply) =>
+      reply.code(201).send({
+        data: await crm.generateBrief(
+          token(req.headers),
+          req.params.id,
           req.id,
         ),
       }),

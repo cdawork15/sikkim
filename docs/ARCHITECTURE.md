@@ -24,7 +24,7 @@ flowchart LR
     Bookings["bookings<br/>slots · holds · bookings · tickets"]
     Media["media<br/>uploads · ffmpeg · signed links · reels"]
     Community["community<br/>events · photos"]
-    Admin["admin<br/>overview · curator CRM · users · bookings"]
+    Admin["admin<br/>overview · curator CRM · tasks<br/>scoring · automation · forecast · users"]
     Core --> Accounts & Hosts & Catalogue & Bookings & Media & Community & Admin
   end
 
@@ -34,6 +34,7 @@ flowchart LR
   end
 
   Ops["Operator CLI<br/>npm run db:migrate · npm run admin"]
+  Claude["Claude API (optional)<br/>AI_PROVIDER=anthropic"]
 
   SPA -- "HTML/JS/CSS" --> Static
   SPA -- "JSON over HTTPS<br/>Bearer token in memory" --> Proxy --> Core
@@ -41,6 +42,7 @@ flowchart LR
   Media --> PG
   Media --> Disk
   Ops -- "owner role" --> PG
+  Admin -. "AI brief, on request<br/>no phone/email" .-> Claude
 ```
 
 Design rules that shape the code:
@@ -182,16 +184,47 @@ stateDiagram-v2
 
 Readiness checks tracked per lead: contact confirmed, agreement signed, photos or videos received, media rights note received, write-up final, site visit, verdict. The Overview tab turns these into the pilot tracker table per district.
 
+### Lead score, automation and the AI brief
+
+Every write to a lead runs these steps in one transaction (`admin/service.ts` → `admin/automation.ts`), so a lead and its automatic tasks are always saved together. The model call for an AI brief runs **outside** any transaction, between two short ones, so a slow model never holds a database lock.
+
+```mermaid
+flowchart TD
+  New["POST /admin/leads"] --> Owner{"ownerId given?"}
+  Owner -- no --> Route["Route: staff who works this district,<br/>else fewest open leads"]
+  Owner -- yes --> Save
+  Route --> Save["Save lead + 'Added at stage' note"]
+  Save --> Play
+  Edit["PATCH /admin/leads/:id"] --> Signed{"agreementSigned set<br/>before Agreed?"}
+  Signed -- yes --> Agreed["stage = agreed"] --> Changed
+  Signed -- no --> Changed{"stage changed?"}
+  Changed -- yes --> Play["Stage playbook:<br/>cancel old automatic tasks,<br/>add this stage's task,<br/>fill empty/past follow-up"]
+  Changed -- no --> Done
+  Play --> Done["Response includes the lead score"]
+
+  Brief["POST /admin/leads/:id/ai-brief"] --> T1["Tx 1: staff check, hourly cap,<br/>read lead, notes, tasks<br/>(no phone, email, contact name)"]
+  T1 --> Model["Claude: structured JSON brief<br/>summary · next step · risks ·<br/>follow-up message · 6 ratings"]
+  Model --> Check["Validate (ratings 1–5, required text)"]
+  Check --> T2["Tx 2: store crm_ai_runs (model, tokens),<br/>AI note, audit"]
+  T2 --> Staff["Staff copy/send the message<br/>or apply ratings with PATCH"]
+```
+
+**Lead score (0–100):** assessment average across the six criteria (35) + stage (25) + readiness checklist (20) + activity in the last 7/14/30 days (15, minus 5 if the follow-up is overdue) + verdict (5). Hot is 70+, warm 40+. Calls, visits, messages, notes, stage moves and finished tasks count as activity; automatic and AI entries do not.
+
+**Revenue forecast (`GET /admin/crm/report`):** booking value = seats × slot price (pilot bookings are free and paid to hosts in cash). Run rate = average of the last three full months. Weighted pipeline = each open lead's `expected_monthly_paise` × its stage probability (5% idea … 90% onboarding). Projection per month = max(already booked, run rate) + weighted pipeline from next month on.
+
 ## Admin workspace
 
-| Tab       | Purpose                                                         | API                                                  |
-| --------- | --------------------------------------------------------------- | ---------------------------------------------------- |
-| Overview  | Live metrics, bookings by area, pipeline funnel, pilot tracker  | `GET /admin/overview`                                |
-| Pipeline  | Curator CRM: search, filter, follow-ups, lead detail and notes  | `/admin/leads`, `/admin/leads/:id`, `.../notes`      |
-| Approvals | Pending hosts, experiences and media, linking to review screens | `/admin/hosts`, `/admin/experiences`, `/admin/media` |
-| Hosts     | Hosts by status, approval expiry                                | `GET /admin/hosts?status=`                           |
-| Users     | Search people, roles (read-only), suspend or restore            | `/admin/users`, `/admin/users/:id/status`            |
-| Bookings  | Look up by reference, guest, email or experience                | `GET /admin/bookings`                                |
+| Tab                  | Purpose                                                                                  | API                                                                          |
+| -------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Overview             | Live metrics, bookings by area, pipeline funnel, pilot tracker                           | `GET /admin/overview`                                                        |
+| Pipeline             | Curator CRM: search, filter, follow-ups, lead score, lead detail, notes, tasks, AI brief | `/admin/leads`, `/admin/leads/:id`, `.../notes`, `.../tasks`, `.../ai-brief` |
+| Tasks                | My or everyone's follow-up tasks; calendar (.ics) download                               | `/admin/tasks`, `/admin/tasks/:id`, `/admin/crm/tasks.ics`                   |
+| CRM insights (super) | Revenue forecast, pipeline health, team performance, CSV export                          | `/admin/crm/report`, `/admin/crm/leads.csv`                                  |
+| Approvals            | Pending hosts, experiences and media, linking to review screens                          | `/admin/hosts`, `/admin/experiences`, `/admin/media`                         |
+| Hosts                | Hosts by status, approval expiry                                                         | `GET /admin/hosts?status=`                                                   |
+| Users                | Search people, roles (read-only), suspend or restore                                     | `/admin/users`, `/admin/users/:id/status`                                    |
+| Bookings             | Look up by reference, guest, email or experience                                         | `GET /admin/bookings`                                                        |
 
 Admin access itself is granted only with the operator command (`npm run admin -- grant --email=…`), so the API can never escalate privileges.
 
@@ -213,6 +246,9 @@ erDiagram
   media_assets ||--o{ experience_media : used_in
   users ||--o{ community_events : creates
   crm_leads ||--o{ crm_lead_notes : logs
+  crm_leads ||--o{ crm_tasks : follow_up
+  crm_leads ||--o{ crm_ai_runs : briefed_by
+  users ||--o{ crm_tasks : assigned
   crm_leads |o--o| hosts : linked_to
   users ||--o{ crm_leads : owns
 ```

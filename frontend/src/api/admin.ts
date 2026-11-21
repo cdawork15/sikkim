@@ -46,6 +46,9 @@ export const noteKindLabels = {
   visit: 'Visit',
   message: 'Message',
   stage: 'Stage',
+  task: 'Task',
+  automation: 'Automatic',
+  ai: 'AI',
 } as const;
 export type NoteKind = keyof typeof noteKindLabels;
 
@@ -75,9 +78,78 @@ export type Lead = {
   hostName: string | null;
   hostStatus: string | null;
   nextFollowUp: string | null;
+  scoreUniqueness: number | null;
+  scoreStory: number | null;
+  scoreReadiness: number | null;
+  scoreAccess: number | null;
+  scoreSafety: number | null;
+  scorePhoto: number | null;
+  expectedMonthlyPaise: number | null;
+  lastActivityAt: string;
+  stageChangedAt: string;
+  score: LeadScore;
   revision: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type ScoreBand = 'hot' | 'warm' | 'cold' | 'live' | 'closed';
+export type LeadScore = {
+  score: number;
+  band: ScoreBand;
+  assessed: number;
+  factors: { label: string; points: number; max: number }[];
+};
+export const bandLabels: Record<ScoreBand, string> = {
+  hot: 'Hot',
+  warm: 'Warm',
+  cold: 'Cold',
+  live: 'Live',
+  closed: 'Closed',
+};
+
+// The six assessment criteria (1–5), in the order of the proposal.
+export const assessmentCriteria = [
+  ['scoreUniqueness', 'uniqueness', 'Uniqueness'],
+  ['scoreStory', 'story', 'Local story'],
+  ['scoreReadiness', 'readiness', 'Host readiness'],
+  ['scoreAccess', 'access', 'Access'],
+  ['scoreSafety', 'safety', 'Safety'],
+  ['scorePhoto', 'photo', 'Photo appeal'],
+] as const;
+export type CriterionKey = (typeof assessmentCriteria)[number][1];
+
+export type TaskStatus = 'open' | 'done' | 'cancelled';
+export type CrmTask = {
+  id: string;
+  title: string;
+  dueOn: string | null;
+  status: TaskStatus;
+  source: 'staff' | 'automation';
+  assigneeId: string | null;
+  assigneeName: string | null;
+  leadId: string;
+  leadName: string;
+  leadCode: string | null;
+  leadStage: LeadStage;
+  createdAt: string;
+  completedAt: string | null;
+};
+
+export type LeadBrief = {
+  summary: string;
+  nextAction: string;
+  risks: string[];
+  followUpMessage: string;
+  assessment: Record<CriterionKey, { rating: number | null; reason: string }>;
+  confidence: 'low' | 'medium' | 'high';
+};
+export type BriefRun = {
+  id: string;
+  brief: LeadBrief;
+  model: string;
+  createdAt: string;
+  requestedBy: string;
 };
 
 export type LeadNote = {
@@ -88,7 +160,11 @@ export type LeadNote = {
   authorName: string;
 };
 
-export type LeadDetail = Lead & { notes: LeadNote[] };
+export type LeadDetail = Lead & {
+  notes: LeadNote[];
+  tasks: CrmTask[];
+  assistant: { enabled: boolean; latest: BriefRun | null };
+};
 
 export type TrackerRow = {
   district: string;
@@ -177,7 +253,83 @@ export type Queue = {
   experiences: number;
   media: number;
   followUpsDue: number;
+  tasksDue: number;
 };
+
+type Paise = number;
+export type CrmReport = {
+  generatedAt: string;
+  scoring: {
+    hot: number;
+    warm: number;
+    cold: number;
+    topLeads: {
+      id: string;
+      code: string | null;
+      name: string;
+      stage: LeadStage;
+      ownerName: string | null;
+      score: number;
+      band: ScoreBand;
+    }[];
+  };
+  health: {
+    stale: number;
+    followUpsOverdue: number;
+    tasksOverdue: number;
+    unassessed: number;
+    unowned: number;
+    stages: {
+      stage: LeadStage;
+      label: string;
+      count: number;
+      avgDaysInStage: number | null;
+    }[];
+    funnel: { stage: LeadStage; label: string; count: number }[];
+  };
+  team: {
+    id: string;
+    name: string;
+    openLeads: number;
+    hotLeads: number;
+    averageScore: number | null;
+    activities30d: number;
+    tasksDone30d: number;
+    tasksOverdue: number;
+    wentLive90d: number;
+  }[];
+  forecast: {
+    currency: 'INR';
+    currentMonth: string;
+    history: { month: string; paise: Paise }[];
+    next30Days: { paise: Paise; bookings: number };
+    leadsWithoutValue: number;
+    liveMonthlyPaise: Paise;
+    stageProbability: Record<LeadStage, number>;
+    runRatePaise: Paise;
+    pipelineTotalPaise: Paise;
+    weightedPipelinePaise: Paise;
+    byStage: {
+      stage: LeadStage;
+      leads: number;
+      probability: number;
+      totalPaise: Paise;
+      weightedPaise: Paise;
+    }[];
+    months: { month: string; bookedPaise: Paise; projectedPaise: Paise }[];
+  };
+};
+
+const rupees = new Intl.NumberFormat('en-IN', {
+  style: 'currency',
+  currency: 'INR',
+  maximumFractionDigits: 0,
+});
+export const formatRupees = (paise: number) => rupees.format(paise / 100);
+export const formatMonth = (month: string) =>
+  new Intl.DateTimeFormat('en-IN', { month: 'short', year: 'numeric' }).format(
+    new Date(month + '-01T00:00:00+05:30'),
+  );
 
 export type AdminBooking = {
   id: string;

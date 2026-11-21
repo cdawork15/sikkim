@@ -6,6 +6,7 @@ import { registerCatalogue } from './catalogue/routes.js';
 import { registerBookings } from './bookings/routes.js';
 import { registerHosts } from './hosts/routes.js';
 import { registerAdmin } from './admin/routes.js';
+import { anthropicAssistant, type LeadAssistant } from './ai/assistant.js';
 import { registerReels } from './reels/routes.js';
 import { randomUUID } from 'node:crypto';
 import type { Writable } from 'node:stream';
@@ -64,6 +65,7 @@ export async function buildApp(
     logStream?: Writable;
     rateLimitMax?: number;
     otpDelivery?: OtpDelivery;
+    assistant?: LeadAssistant | null;
   } = {},
 ) {
   const app = Fastify({
@@ -231,7 +233,14 @@ export async function buildApp(
     });
   registerAccounts(app, database, config, otpDelivery);
   registerHosts(app, database, config);
-  registerAdmin(app, database, config);
+  // The CRM AI assistant is off unless AI_PROVIDER is set (tests inject one).
+  const assistant =
+    options.assistant !== undefined
+      ? options.assistant
+      : config.ai.provider === 'anthropic'
+        ? anthropicAssistant(config.ai)
+        : null;
+  registerAdmin(app, database, config, assistant);
   registerReels(app, database, config);
   registerCatalogue(app, database, config);
   registerBookings(app, database, config);

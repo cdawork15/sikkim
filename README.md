@@ -35,11 +35,15 @@ Sign in at `/welcome` with a one-time code, or with a password once you have add
 
 ## Account types
 
-| Type  | Can do                                                                         |
-| ----- | ------------------------------------------------------------------------------ |
-| User  | Browse, book, save, share reels                                                |
-| Admin | Plus: create trips, review hosts/trips/reels, curator pipeline, booking lookup |
-| Super | Plus: Overview analytics, People directory, suspend accounts                   |
+| Type  | Can do                                                                                                   |
+| ----- | -------------------------------------------------------------------------------------------------------- |
+| User  | Browse, book, save, share reels                                                                          |
+| Admin | Plus: create trips, review hosts/trips/reels, curator pipeline and tasks, AI brief, booking lookup       |
+| Super | Plus: Overview analytics, CRM insights (forecast, team), lead export, People directory, suspend accounts |
+
+## Curator CRM
+
+Operations → **Pipeline** holds the curator leads. Each lead has a **lead score** (0–100, hot/warm/cold) built from the six assessment ratings, its stage, the readiness checklist and how recently someone worked it. **Tasks** are created automatically when a lead changes stage and can be added by hand; Operations → Tasks lists them and exports them to a calendar. Super admins get **CRM insights**: pipeline health, team performance and a revenue forecast (booking value: seats × price, since pilot bookings are paid to hosts in cash), plus a CSV export. With `AI_PROVIDER=anthropic` in `backend/.env`, each lead also gets an **AI brief** from Claude (summary, next step, risks, a WhatsApp follow-up and suggested ratings that staff choose to apply). Details: [API guide](backend/docs/API.md#curator-crm-fields), [architecture](docs/ARCHITECTURE.md#curator-crm-pipeline).
 
 ## Checks
 

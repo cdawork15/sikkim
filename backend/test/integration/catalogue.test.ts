@@ -54,7 +54,7 @@ test('catalogue API and PostgreSQL rules', async (t) => {
 
   async function setup(real = true) {
     await owner.query(`
-      TRUNCATE public.user_reels, public.auth_otp_challenges, public.crm_lead_notes, public.crm_leads, public.community_photos, public.community_events, public.booking_changes, public.tickets, public.bookings,
+      TRUNCATE public.user_reels, public.auth_otp_challenges, public.crm_ai_runs, public.crm_tasks, public.crm_lead_notes, public.crm_leads, public.community_photos, public.community_events, public.booking_changes, public.tickets, public.bookings,
         public.seat_holds, public.experience_slots, public.story_views,
         public.saved_items,
         public.experience_likes,

@@ -17,7 +17,7 @@ React 19 · TypeScript · Vite · React Router. A mobile-first web app for disco
 | Travel Essentials            | `/essentials`, `/essentials/:section`                                                                                                                                                                                              | Built-in guidance               |
 | Host workspace               | `/hosting`, listings, dates, media, stories                                                                                                                                                                                        | API                             |
 | Review                       | `/review`, `/review/hosts/:id`, `/review/experiences/:id`, `/review/media`                                                                                                                                                         | API, admins only                |
-| **Operations (admin + CRM)** | `/admin?tab=overview\|pipeline\|approvals\|hosts\|users\|bookings`, `/admin/leads/new`, `/admin/leads/:id`, `/admin/users/:id`                                                                                                     | API, admins only                |
+| **Operations (admin + CRM)** | `/admin?tab=overview\|pipeline\|tasks\|insights\|approvals\|hosts\|users\|bookings`, `/admin/leads/new`, `/admin/leads/:id`, `/admin/users/:id`                                                                                    | API, admins only                |
 | Reels                        | `/explore` (experience + traveller reels), `/reels/new` (share a reel: **Camera** or **Photos**, also offered from the ＋ icon under Share in each reel's action rail)                                                             | API, reviewed by admins         |
 
 The Operations workspace follows prototype screen S20: segmented tabs, metric tiles and red progress bars on the black theme.
@@ -79,6 +79,8 @@ npm run format:check
 Paid checkout, real email/SMS delivery of sign-in codes, and Community chat and joining are not built yet. Reloading the page signs you out, because tokens are kept in memory only.
 
 ## Changelog
+
+- **2026-11-21** CRM intelligence in Operations: lead score badge on every pipeline row; lead page adds a **Lead score** panel (points per factor), the six assessment ratings and expected monthly value in the form, a **Tasks** panel, and an **AI brief** panel when the API has AI switched on (copy or open the follow-up in WhatsApp, apply suggested ratings). New **Tasks** tab (mine/everyone, open/finished/dropped, calendar download) and super-only **CRM insights** tab (revenue forecast, pipeline value by stage, health, hottest leads, time in stage, team table, CSV export). Same panels, badges and bars as the S20 Operations screens.
 
 - **2026-11-21** Share a reel from **Camera** or **Photos**, from the ＋ icon under Share on each Explore reel. Phones open their own camera app (`capture`); laptops record in the page (up to 60 s, `MediaRecorder`). iPhone `.mov` videos are accepted.
 

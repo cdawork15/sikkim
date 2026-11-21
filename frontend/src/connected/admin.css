@@ -576,3 +576,62 @@ a.ops-row:focus-visible {
   color: var(--color-muted);
   font-size: 13px;
 }
+
+/* CRM: lead score, tasks and AI brief (same panels, lines and badges). */
+.ops-lead-side {
+  display: grid;
+  gap: 14px;
+}
+.ops-row-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.ops-task {
+  align-items: flex-start;
+}
+.ops-task > span:first-child {
+  flex: 1 1 220px;
+}
+.ops-task .button,
+.ops-brief-actions .button,
+.ops-brief .ops-panel-head .button {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+.ops-task-actions,
+.ops-brief-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ops-closed-tasks {
+  margin-top: 12px;
+  color: var(--color-muted);
+  font-size: 14px;
+}
+.ops-closed-tasks summary {
+  cursor: pointer;
+}
+.ops-brief p {
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+.ops-brief-risks {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  color: var(--color-muted);
+}
+.ops-brief-message {
+  margin: 4px 0 10px;
+  gap: 6px;
+}
+.ops-brief-title {
+  margin: 16px 0 4px;
+  font-size: 15px;
+}
+.ops-brief > small {
+  display: block;
+  margin-top: 10px;
+}

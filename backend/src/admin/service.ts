@@ -10,6 +10,9 @@ import {
   staffRoles,
 } from '../accounts/roles.js';
 import { audit } from '../db/audit.js';
+import { autoStage, enterStage, routeLead } from './automation.js';
+import { latestBrief, leadTasks } from './queries.js';
+import { scoreLead, type ScoreInput } from './scoring.js';
 import {
   decodeCursor,
   encodeCursor,
@@ -22,6 +25,7 @@ import {
   type LeadFilter,
   type LeadInput,
   type LeadPatch,
+  type LeadStage,
 } from './model.js';
 
 const PAGE = 20;
@@ -44,7 +48,7 @@ function page<T extends { id: string; createdAt: Date }>(rows: T[]) {
   };
 }
 
-const leadSelect = `
+export const leadSelect = `
   l.id,
   l.code,
   l.name,
@@ -70,6 +74,15 @@ const leadSelect = `
   h.public_name AS "hostName",
   h.status AS "hostStatus",
   to_char(l.next_follow_up, 'YYYY-MM-DD') AS "nextFollowUp",
+  l.score_uniqueness AS "scoreUniqueness",
+  l.score_story AS "scoreStory",
+  l.score_readiness AS "scoreReadiness",
+  l.score_access AS "scoreAccess",
+  l.score_safety AS "scoreSafety",
+  l.score_photo AS "scorePhoto",
+  l.expected_monthly_paise AS "expectedMonthlyPaise",
+  l.last_activity_at AS "lastActivityAt",
+  l.stage_changed_at AS "stageChangedAt",
   l.revision,
   l.created_at AS "createdAt",
   l.updated_at AS "updatedAt"
@@ -90,13 +103,19 @@ const identityColumns = `
     WHERE actor_id = u.id AND action = 'session.created') AS "lastSignInAt"
 `;
 
-const leadFrom = `
+export const leadFrom = `
   FROM public.crm_leads l
     LEFT JOIN public.users o ON o.id = l.owner_id
     LEFT JOIN public.hosts h ON h.id = l.host_id
 `;
 
-async function readLead(client: PoolClient, id: string, lock = false) {
+/** Adds the computed lead score to a lead row. */
+export const withScore = <T extends ScoreInput>(lead: T) => ({
+  ...lead,
+  score: scoreLead(lead),
+});
+
+export async function readLead(client: PoolClient, id: string, lock = false) {
   const lead = (
     await client.query(
       `SELECT ${leadSelect} ${leadFrom} WHERE l.id = $1 ${lock ? 'FOR UPDATE OF l' : ''}`,
@@ -104,7 +123,7 @@ async function readLead(client: PoolClient, id: string, lock = false) {
     )
   ).rows[0];
   if (!lead) throw notFound('Lead');
-  return lead;
+  return withScore(lead);
 }
 
 async function checkReferences(client: PoolClient, input: LeadInput) {
@@ -149,14 +168,17 @@ async function guardUnique<T>(task: () => Promise<T>): Promise<T> {
   }
 }
 
-async function addNote(
+// Contact with the curator (calls, visits, messages, notes, stage moves and
+// finished tasks) counts as activity for the lead score; automatic and AI
+// entries do not.
+export async function addNote(
   client: PoolClient,
   leadId: string,
   authorId: string,
   kind: string,
   body: string,
 ) {
-  return (
+  const created = (
     await client.query(
       `
         INSERT INTO public.crm_lead_notes (lead_id, author_id, kind, body)
@@ -166,9 +188,23 @@ async function addNote(
       [leadId, authorId, kind, body],
     )
   ).rows[0];
+  await client.query(
+    `
+      UPDATE public.crm_leads
+      SET updated_at = clock_timestamp(),
+        last_activity_at = CASE WHEN $2 THEN clock_timestamp() ELSE last_activity_at END
+      WHERE id = $1
+    `,
+    [leadId, !['automation', 'ai'].includes(kind)],
+  );
+  return created;
 }
 
-export function adminService(database: Database, config: Config) {
+export function adminService(
+  database: Database,
+  config: Config,
+  options: { aiEnabled: boolean } = { aiEnabled: false },
+) {
   const access = accountAccess(database, config);
   // Staff (admin or super): trips, pipeline, bookings support.
   const asAdmin = <T>(
@@ -192,9 +228,10 @@ export function adminService(database: Database, config: Config) {
   return {
     // Work waiting for staff: review queues and CRM follow-ups.
     queue: (token: string) =>
-      asAdmin(token, async (client) => {
+      asAdmin(token, async (client, adminId) => {
         return (
-          await client.query(`
+          await client.query(
+            `
             SELECT
               (SELECT count(*)::int FROM public.hosts WHERE status = 'pending') AS hosts,
               (SELECT count(*)::int FROM public.experiences WHERE status = 'review') AS experiences,
@@ -202,8 +239,13 @@ export function adminService(database: Database, config: Config) {
                  WHERE moderation = 'pending' AND state = 'ready') AS media,
               (SELECT count(*)::int FROM public.crm_leads
                  WHERE next_follow_up <= (clock_timestamp() AT TIME ZONE 'Asia/Kolkata')::date
-                   AND stage NOT IN ('live', 'declined')) AS "followUpsDue"
-          `)
+                   AND stage NOT IN ('live', 'declined')) AS "followUpsDue",
+              (SELECT count(*)::int FROM public.crm_tasks
+                 WHERE status = 'open' AND assignee_id = $1
+                   AND due_on <= (clock_timestamp() AT TIME ZONE 'Asia/Kolkata')::date) AS "tasksDue"
+          `,
+            [adminId],
+          )
         ).rows[0];
       }),
 
@@ -405,7 +447,7 @@ export function adminService(database: Database, config: Config) {
             ],
           )
         ).rows;
-        return page(rows);
+        return page(rows.map(withScore));
       }),
 
     createLead: (token: string, raw: LeadInput, requestId: string) =>
@@ -413,6 +455,10 @@ export function adminService(database: Database, config: Config) {
         const input = normaliseLead(raw);
         if (!input.name) throw invalid('Add the curator or business name.');
         await checkReferences(client, input);
+        // Routing: a lead saved without an owner is assigned automatically.
+        const routed = !input.ownerId;
+        if (routed)
+          input.ownerId = await routeLead(client, input.district ?? '');
         const entries = Object.entries(leadColumns).filter(
           ([key]) => input[key as keyof LeadInput] !== undefined,
         );
@@ -434,6 +480,24 @@ export function adminService(database: Database, config: Config) {
           'stage',
           `Added at stage: ${stageLabels[input.stage ?? 'idea']}`,
         );
+        if (routed && input.ownerId) {
+          const owner = (
+            await client.query(
+              'SELECT display_name FROM public.users WHERE id = $1',
+              [input.ownerId],
+            )
+          ).rows[0];
+          await addNote(
+            client,
+            id,
+            adminId,
+            'automation',
+            `Assigned automatically to ${owner?.display_name ?? 'staff'}.`,
+          );
+        }
+        await enterStage(client, id, input.stage ?? 'idea', adminId, {
+          keepFollowUp: input.nextFollowUp !== undefined,
+        });
         await audit(
           client,
           adminId,
@@ -462,7 +526,15 @@ export function adminService(database: Database, config: Config) {
             [id],
           )
         ).rows;
-        return { ...lead, notes };
+        return {
+          ...lead,
+          notes,
+          tasks: await leadTasks(client, id),
+          assistant: {
+            enabled: options.aiEnabled,
+            latest: await latestBrief(client, id),
+          },
+        };
       }),
 
     updateLead: (
@@ -477,6 +549,13 @@ export function adminService(database: Database, config: Config) {
         const current = await readLead(client, id, true);
         if (current.revision !== revision) throw stale();
         await checkReferences(client, input);
+        // Records rule: a signed agreement moves an early lead to "Agreed".
+        const promoted = autoStage(
+          current.stage as LeadStage,
+          input,
+          current.agreementSigned,
+        );
+        if (promoted) input.stage = promoted;
         const entries = Object.entries(leadColumns).filter(
           ([key]) => input[key as keyof LeadInput] !== undefined,
         );
@@ -485,12 +564,17 @@ export function adminService(database: Database, config: Config) {
           client.query(
             `
               UPDATE public.crm_leads
-              SET ${entries.map(([, c], i) => `${c} = $${i + 2}`).join(', ')},
+              SET ${entries.map(([, c], i) => `${c} = $${i + 3}`).join(', ')},
+                stage_changed_at = CASE WHEN $2 THEN clock_timestamp() ELSE stage_changed_at END,
                 revision = revision + 1,
                 updated_at = clock_timestamp()
               WHERE id = $1
             `,
-            [id, ...entries.map(([key]) => input[key as keyof LeadInput])],
+            [
+              id,
+              Boolean(input.stage && input.stage !== current.stage),
+              ...entries.map(([key]) => input[key as keyof LeadInput]),
+            ],
           ),
         );
         if (input.stage && input.stage !== current.stage) {
@@ -499,8 +583,12 @@ export function adminService(database: Database, config: Config) {
             id,
             adminId,
             'stage',
-            `Stage: ${stageLabels[current.stage as keyof typeof stageLabels]} → ${stageLabels[input.stage]}`,
+            `Stage: ${stageLabels[current.stage as keyof typeof stageLabels]} → ${stageLabels[input.stage]}` +
+              (promoted ? ' (agreement signed)' : ''),
           );
+          await enterStage(client, id, input.stage, adminId, {
+            keepFollowUp: input.nextFollowUp !== undefined,
+          });
         }
         await audit(
           client,
@@ -524,10 +612,6 @@ export function adminService(database: Database, config: Config) {
         const body = note.body.trim();
         if (!body) throw invalid('Write a note before saving.');
         const created = await addNote(client, id, adminId, note.kind, body);
-        await client.query(
-          'UPDATE public.crm_leads SET updated_at = clock_timestamp() WHERE id = $1',
-          [id],
-        );
         await audit(
           client,
           adminId,

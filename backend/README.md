@@ -8,18 +8,19 @@ Node 24 · TypeScript · Fastify 5 · PostgreSQL. The API behind the [Sikkim Exp
 
 ## What works
 
-| Area          | Status                                                                                                                                                                 |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Accounts      | One-time code (OTP) sign-in and sign-up by phone or email (email + password still works), 30-minute sessions refreshed up to 24 h, privacy export and deletion request |
-| Discovery     | Catalogue, filters, search, reviews, saves and likes                                                                                                                   |
-| Bookings      | Free bookings: slots, 10-minute seat holds, bookings, QR tickets, host check-in, cancel and reschedule                                                                 |
-| Hosts         | Profiles; real hosts approved after a manual identity check (`HOST_VERIFICATION_MODE=manual`)                                                                          |
-| Media         | Uploads checked and converted with ffmpeg, rights metadata, admin review, signed links                                                                                 |
-| Community     | Events and event photos                                                                                                                                                |
-| Account types | **User** (every account), **admin** (trips, reviews, curator pipeline, bookings), **super** (everything, plus people and account analytics)                            |
-| Reels         | Anyone signed in can share a reel; an admin approves it before it shows in Explore                                                                                     |
-| Admin         | Operations overview, curator CRM pipeline with notes, people directory and suspension, booking lookup, operator command for staff access                               |
-| Not yet       | Real email/SMS delivery for codes (locally they are printed to the API log), paid checkout, Community chat and joining, object storage for media                       |
+| Area          | Status                                                                                                                                                                                                      |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Accounts      | One-time code (OTP) sign-in and sign-up by phone or email (email + password still works), 30-minute sessions refreshed up to 24 h, privacy export and deletion request                                      |
+| Discovery     | Catalogue, filters, search, reviews, saves and likes                                                                                                                                                        |
+| Bookings      | Free bookings: slots, 10-minute seat holds, bookings, QR tickets, host check-in, cancel and reschedule                                                                                                      |
+| Hosts         | Profiles; real hosts approved after a manual identity check (`HOST_VERIFICATION_MODE=manual`)                                                                                                               |
+| Media         | Uploads checked and converted with ffmpeg, rights metadata, admin review, signed links                                                                                                                      |
+| Community     | Events and event photos                                                                                                                                                                                     |
+| Account types | **User** (every account), **admin** (trips, reviews, curator pipeline, bookings), **super** (everything, plus people and account analytics)                                                                 |
+| Reels         | Anyone signed in can share a reel; an admin approves it before it shows in Explore                                                                                                                          |
+| Admin         | Operations overview, curator CRM pipeline with notes, people directory and suspension, booking lookup, operator command for staff access                                                                    |
+| CRM           | Lead score (six-criteria assessment + progress + readiness + activity), follow-up tasks, stage playbook and lead routing, pipeline/team/revenue report, CSV and calendar export, optional AI brief (Claude) |
+| Not yet       | Real email/SMS delivery for codes (locally they are printed to the API log), paid checkout, Community chat and joining, object storage for media                                                            |
 
 ## Requirements
 
@@ -102,6 +103,10 @@ All settings come from the environment (`.env` locally, a private env file on se
 | `OTP_SECRET`                                                                       | with OTP           | 32+ character secret used to hash codes                                                                   |
 | `OTP_DEFAULT_COUNTRY_CODE`                                                         | no                 | Country code added to local phone numbers (default `91`)                                                  |
 | `ENABLE_DEMO_AUTH`                                                                 | local only         | Test sign-in accounts; refused in production                                                              |
+| `AI_PROVIDER`                                                                      | no                 | `disabled` (default: no AI calls) or `anthropic` for the CRM AI brief                                     |
+| `AI_MODEL`, `ANTHROPIC_API_KEY`                                                    | with AI            | Claude model ID (e.g. `claude-opus-5-5`) and API key from the Claude Console                              |
+| `AI_ASSIST_HOURLY_LIMIT`                                                           | no                 | AI briefs per staff member per hour (default `20`) — caps spend                                           |
+| `AI_REFUSAL_FALLBACK`                                                              | no                 | `default` (re-run a declined request on Anthropic's recommended fallback model) or `off`                  |
 | `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `DB_OWNER_PASSWORD`, `DB_APP_PASSWORD` | setup only         | Used by `npm run db:setup`                                                                                |
 
 Startup fails with a clear message if a value is unsafe or missing.
@@ -138,6 +143,8 @@ test/integration/   Tests against the disposable sikkim_test database
 ```
 
 ## Changelog
+
+- **2026-11-21** CRM intelligence. **Lead score** 0–100 with named factors (six-criteria assessment from the proposal: uniqueness, local story, host readiness, access, safety, photo appeal; stage; readiness checklist; recent activity; verdict) and hot/warm/cold bands. **Tasks** per lead (`/v1/admin/leads/:id/tasks`, `/v1/admin/tasks`) with an iCalendar export. **Workflow automation:** new leads routed to the district owner or the least-loaded staff member, a follow-up task for every stage, a signed agreement moves the lead to Agreed. **Reporting and forecasting** (`/v1/admin/crm/report`, super): pipeline health, time in stage, team performance, booking value history, run rate, stage-weighted pipeline and a three-month projection. **CSV export** of all leads. **AI brief** (`/v1/admin/leads/:id/ai-brief`, off unless `AI_PROVIDER=anthropic`): summary, next step, risks, a WhatsApp-ready follow-up and suggested ratings, logged in `crm_ai_runs` with token counts and capped per person per hour. Migration `1770000012000_crm-intelligence`; new dependency `@anthropic-ai/sdk`.
 
 - **2026-11-21** Phone camera videos: `video/quicktime` (.mov) uploads accepted; timed metadata tracks from phones are allowed but never copied (only one picture and one sound track are transcoded, metadata stripped). Captions that run past the real video length are trimmed to fit. Migration `1770000011000_camera-videos`.
 
