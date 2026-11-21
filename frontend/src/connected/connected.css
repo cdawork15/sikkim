@@ -1231,3 +1231,22 @@ fieldset.api-form {
     grid-template-columns: 1fr;
   }
 }
+
+.profile-methods {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 6px;
+  padding: 0;
+  list-style: none;
+}
+.profile-methods li {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+}
+.profile-methods span {
+  color: var(--color-muted);
+  font-size: 13px;
+}

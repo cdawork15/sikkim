@@ -66,7 +66,10 @@ npm run admin -- grant --email=you@example.com --role=super
 npm run admin -- grant --phone=+919800000000            # admin is the default role
 npm run admin -- revoke --email=someone@example.com --role=admin
 npm run admin -- list
+npm run admin -- set-password --email=you@example.com   # asks for the password; signs out existing sessions
 ```
+
+`set-password` reads the password from the prompt (or from stdin, e.g. `printf '%s' "$PASSWORD" | npm run admin -- set-password …`), never from the command line.
 
 The command uses `MIGRATION_DATABASE_URL` (owner credentials). The API's own database role cannot change roles, so staff access can never be granted through a compromised API.
 
@@ -135,6 +138,8 @@ test/integration/   Tests against the disposable sikkim_test database
 ```
 
 ## Changelog
+
+- **2026-11-21** Every account can sign in with a one-time code **or** a password: `PUT /v1/me/password` to add or change one, password login by email or mobile, `hasPassword` on `/me`, `npm run admin -- set-password`. Fixed: password sign-up could create a second account for an email already used with a code. Migration `1770000010000_password-for-everyone`.
 
 - **2026-11-20** `GET /v1/me` (and the session user) also returns the owner's own `email`, `phone`, `createdAt` and `summary` (`bookings`, `saved`, `reels` counts) for the profile page.
 

@@ -8,17 +8,17 @@ React 19 · TypeScript · Vite · React Router. A mobile-first web app for disco
 
 ## Screens
 
-| Area                         | Routes                                                                                                                                                                                                         | Data                            |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| Discovery                    | `/`, `/explore` (reels), `/explore?view=list`, `/experiences/:slug`, `/hosts`                                                                                                                                  | API                             |
-| Booking                      | `/experiences/:slug/book`, `/essentials/bookings`, tickets                                                                                                                                                     | API (free bookings)             |
-| Account                      | `/welcome` (one-time code by phone or email), `/onboarding` (name + interests), `/account` (profile: About you, Interests, Travel preferences, Notifications & privacy via `?section=`), `/settings`, `/saved` | API                             |
-| Community                    | `/community`, events, stories                                                                                                                                                                                  | API (chat is still sample data) |
-| Travel Essentials            | `/essentials`, `/essentials/:section`                                                                                                                                                                          | Built-in guidance               |
-| Host workspace               | `/hosting`, listings, dates, media, stories                                                                                                                                                                    | API                             |
-| Review                       | `/review`, `/review/hosts/:id`, `/review/experiences/:id`, `/review/media`                                                                                                                                     | API, admins only                |
-| **Operations (admin + CRM)** | `/admin?tab=overview\|pipeline\|approvals\|hosts\|users\|bookings`, `/admin/leads/new`, `/admin/leads/:id`, `/admin/users/:id`                                                                                 | API, admins only                |
-| Reels                        | `/explore` (experience + traveller reels), `/reels/new` (share a reel)                                                                                                                                         | API, reviewed by admins         |
+| Area                         | Routes                                                                                                                                                                                                                             | Data                            |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| Discovery                    | `/`, `/explore` (reels), `/explore?view=list`, `/experiences/:slug`, `/hosts`                                                                                                                                                      | API                             |
+| Booking                      | `/experiences/:slug/book`, `/essentials/bookings`, tickets                                                                                                                                                                         | API (free bookings)             |
+| Account                      | `/welcome` (one-time code by phone or email), `/onboarding` (name + interests), `/account` (profile: About you, Interests, Travel preferences, Notifications & privacy, Password & sign-in via `?section=`), `/settings`, `/saved` | API                             |
+| Community                    | `/community`, events, stories                                                                                                                                                                                                      | API (chat is still sample data) |
+| Travel Essentials            | `/essentials`, `/essentials/:section`                                                                                                                                                                                              | Built-in guidance               |
+| Host workspace               | `/hosting`, listings, dates, media, stories                                                                                                                                                                                        | API                             |
+| Review                       | `/review`, `/review/hosts/:id`, `/review/experiences/:id`, `/review/media`                                                                                                                                                         | API, admins only                |
+| **Operations (admin + CRM)** | `/admin?tab=overview\|pipeline\|approvals\|hosts\|users\|bookings`, `/admin/leads/new`, `/admin/leads/:id`, `/admin/users/:id`                                                                                                     | API, admins only                |
+| Reels                        | `/explore` (experience + traveller reels), `/reels/new` (share a reel)                                                                                                                                                             | API, reviewed by admins         |
 
 The Operations workspace follows prototype screen S20: segmented tabs, metric tiles and red progress bars on the black theme.
 
@@ -47,7 +47,7 @@ npm run dev        # http://127.0.0.1:5173 — /v1 is proxied to the backend
 
 Sample mode without a backend: `VITE_DATA_MODE=demo npm run dev`.
 
-Sign in with a one-time code. Locally the backend prints codes in its log (`"event":"otp_dev_code"`).
+Sign in with a one-time code, or with **Sign in with password** (email or mobile number) once a password is added in Profile → Password & sign-in. Locally the backend prints codes in its log (`"event":"otp_dev_code"`).
 
 Account types: **user** (everyone), **admin** (trips, reviews, pipeline, bookings) and **super** (also Overview analytics and the People directory). Grant staff access on the backend after the person has signed in once: `npm run admin -- grant --email=you@example.com --role=super`. Sign in again: staff land in Operations, and it is also in the header **Admin** button and the account menu.
 
@@ -79,6 +79,8 @@ npm run format:check
 Paid checkout, real email/SMS delivery of sign-in codes, and Community chat and joining are not built yet. Reloading the page signs you out, because tokens are kept in memory only.
 
 ## Changelog
+
+- **2026-11-21** Password sign-in by email or mobile number; new profile section **Password & sign-in** to add or change a password (the one-time code keeps working).
 
 - **2026-11-20** Account menu on the header avatar (every screen size once signed in): profile, bookings, saved, share a reel, host workspace, Operations for staff, privacy, **Sign out**. `/account` is now one profile page with a summary (contact, role, member since, bookings/saved/reels counts) and four sections: About you, Interests, Travel preferences, Notifications & privacy.
 

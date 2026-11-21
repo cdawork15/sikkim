@@ -106,7 +106,7 @@ test(
               'SELECT count(*)::int AS count FROM public.schema_migrations',
             )
           ).rows[0].count,
-          11,
+          12,
         );
         assert.equal(
           (
@@ -267,7 +267,7 @@ test(
               'SELECT count(*)::int AS count FROM public.schema_migrations',
             )
           ).rows[0].count,
-          11,
+          12,
         );
       },
     );
@@ -342,7 +342,7 @@ test(
               'SELECT count(*)::int AS count FROM public.schema_migrations',
             )
           ).rows[0].count,
-          11,
+          12,
         );
         assert.equal(
           (

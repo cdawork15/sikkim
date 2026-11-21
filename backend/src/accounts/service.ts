@@ -1,4 +1,5 @@
 import { passwordAccounts } from './password-auth.js';
+import { hashPassword, verifyPassword } from './password.js';
 import { otpAccounts, type OtpDelivery } from './otp.js';
 import { bookingAccountData } from '../bookings/export.js';
 import { mediaAccountData } from '../media/actions.js';
@@ -43,7 +44,9 @@ async function profile(client: PoolClient, userId: string) {
             'saved', (SELECT count(*)::int FROM public.saved_items WHERE user_id = u.id),
             'reels', (SELECT count(*)::int FROM public.user_reels
               WHERE user_id = u.id AND status = 'active')
-          ) AS summary
+          ) AS summary,
+          EXISTS (SELECT 1 FROM public.auth_passwords WHERE user_id = u.id)
+            AS "hasPassword"
         FROM public.users u
         WHERE id = $1
       `,
@@ -171,7 +174,7 @@ export function accountService(
   const authenticated = accountAccess(database, config);
 
   return {
-    ...passwordAccounts(database, createSession),
+    ...passwordAccounts(database, config.otp.defaultCountryCode, createSession),
     ...otpAccounts(database, config, deliver, createSession),
     interests: () =>
       database.transaction(
@@ -267,6 +270,70 @@ export function accountService(
       authenticated(token, (client, principal) =>
         profile(client, principal.userId),
       ),
+
+    /**
+     * Adds a password to the account, or changes it. Changing needs the current
+     * password; adding one is allowed because the session already proves who you are.
+     * Other devices are signed out; this session stays.
+     */
+    async setPassword(
+      token: string,
+      input: { currentPassword?: string; newPassword: string },
+      requestId: string,
+    ) {
+      const newHash = await hashPassword(input.newPassword);
+      return authenticated(token, async (client, p) => {
+        const row = (
+          await client.query<{ isDemo: boolean; hash: string | null }>(
+            `
+              SELECT u.is_demo AS "isDemo", pw.password_hash AS hash
+              FROM public.users u
+                LEFT JOIN public.auth_passwords pw ON pw.user_id = u.id
+              WHERE u.id = $1
+            `,
+            [p.userId],
+          )
+        ).rows[0]!;
+        if (row.isDemo)
+          throw new AccountError(
+            403,
+            'FORBIDDEN',
+            'Test accounts cannot have a password.',
+          );
+        if (row.hash) {
+          const matches =
+            input.currentPassword !== undefined &&
+            (await verifyPassword(input.currentPassword, row.hash));
+          if (!matches)
+            throw new AccountError(
+              400,
+              'PASSWORD_INCORRECT',
+              'Your current password is incorrect.',
+            );
+        }
+        await client.query(
+          `
+            INSERT INTO public.auth_passwords (user_id, password_hash)
+            VALUES ($1, $2)
+            ON CONFLICT (user_id) DO UPDATE
+              SET password_hash = EXCLUDED.password_hash,
+                  updated_at = CURRENT_TIMESTAMP
+          `,
+          [p.userId, newHash],
+        );
+        await client.query(
+          'DELETE FROM public.auth_sessions WHERE user_id = $1 AND id <> $2',
+          [p.userId, p.sessionId],
+        );
+        await audit(
+          client,
+          p.userId,
+          row.hash ? 'account.password_changed' : 'account.password_added',
+          requestId,
+        );
+        return profile(client, p.userId);
+      });
+    },
 
     updateProfile: (token: string, patch: ProfilePatch, requestId: string) =>
       authenticated(token, async (client, p) => {

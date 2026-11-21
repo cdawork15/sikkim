@@ -96,16 +96,19 @@ export function Welcome() {
                   setBusy(true);
                   setError(undefined);
                   const data = new FormData(event.currentTarget);
-                  const credentials = {
-                    email: String(data.get('email')).trim(),
-                    password: String(data.get('password')),
-                  };
+                  const login = String(data.get('email')).trim();
+                  const password = String(data.get('password'));
                   const task = signUp
                     ? api.register({
-                        ...credentials,
+                        email: login,
+                        password,
                         displayName: String(data.get('displayName')).trim(),
                       })
-                    : api.login(credentials);
+                    : api.login(
+                        login.includes('@')
+                          ? { email: login, password }
+                          : { phone: login, password },
+                      );
                   void task
                     .then((account) =>
                       navigate(landingFor(account, destination), {
@@ -139,11 +142,11 @@ export function Welcome() {
                   </label>
                 )}
                 <label>
-                  Email
+                  {signUp ? 'Email' : 'Email or mobile number'}
                   <input
                     name="email"
-                    type="email"
-                    autoComplete="email"
+                    type={signUp ? 'email' : 'text'}
+                    autoComplete={signUp ? 'email' : 'username'}
                     autoCapitalize="none"
                     spellCheck={false}
                     required
@@ -281,10 +284,11 @@ export function Account() {
 }
 
 const profileSections = [
-  ['about', 'About you', 'Name, language and sign-in'],
+  ['about', 'About you', 'Name and language'],
   ['interests', 'Interests', 'What we show you first'],
   ['travel', 'Travel preferences', 'Area, dates, group and pace'],
   ['notifications', 'Notifications & privacy', 'Alerts and visibility'],
+  ['security', 'Password & sign-in', 'One-time code or password'],
 ] as const;
 type ProfileSection = (typeof profileSections)[number][0];
 
@@ -506,19 +510,6 @@ function ProfileForm({
           Content is currently in English. We’ll remember your language for when
           translations arrive.
         </p>
-        <dl className="api-wide profile-signin">
-          <div>
-            <dt>Mobile</dt>
-            <dd>{formatPhone(account.phone) ?? 'Not added'}</dd>
-          </div>
-          <div>
-            <dt>Email</dt>
-            <dd>{account.email ?? 'Not added'}</dd>
-          </div>
-        </dl>
-        <p className="api-wide api-muted">
-          You sign in with a one-time code sent to these.
-        </p>
         <button className="button button-primary" disabled={action.busy}>
           Save details
         </button>
@@ -652,6 +643,9 @@ function ProfileForm({
         {status}
       </form>
     );
+
+  if (section === 'security')
+    return <PasswordForm account={account} saved={saved} />;
 
   return (
     <form
@@ -869,5 +863,150 @@ function Privacy({ settings }: { settings: Settings }) {
         </button>
       </div>
     </>
+  );
+}
+
+function PasswordForm({
+  account,
+  saved,
+}: {
+  account: AccountData;
+  saved: (data: AccountData) => void;
+}) {
+  const api = useApi();
+  const action = useAction();
+  const [mismatch, setMismatch] = useState(false);
+  const form = useRef<HTMLFormElement>(null);
+  const hasPassword = Boolean(account.hasPassword);
+  const signInWith = [formatPhone(account.phone), account.email].filter(
+    Boolean,
+  );
+  return (
+    <form
+      ref={form}
+      className="api-panel api-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        const newPassword = String(data.get('newPassword'));
+        if (newPassword !== String(data.get('confirmPassword'))) {
+          setMismatch(true);
+          return;
+        }
+        setMismatch(false);
+        void action.run(
+          async () => {
+            const result = await api.request<AccountData>('/me/password', {
+              method: 'PUT',
+              private: true,
+              body: {
+                ...(hasPassword
+                  ? { currentPassword: String(data.get('currentPassword')) }
+                  : {}),
+                newPassword,
+              },
+            });
+            api.updateUser(result.data);
+            saved(result.data);
+            form.current?.reset();
+          },
+          hasPassword
+            ? 'Your password is changed. Other devices were signed out.'
+            : 'Password added. You can now sign in with a code or your password.',
+        );
+      }}
+    >
+      <h2 className="api-wide">Password & sign-in</h2>
+      <dl className="api-wide profile-signin">
+        <div>
+          <dt>Mobile</dt>
+          <dd>{formatPhone(account.phone) ?? 'Not added'}</dd>
+        </div>
+        <div>
+          <dt>Email</dt>
+          <dd>{account.email ?? 'Not added'}</dd>
+        </div>
+      </dl>
+      <ul className="api-wide profile-methods">
+        <li>
+          <strong>One-time code</strong>
+          <span>
+            Always on. We send a 6-digit code to your mobile or email.
+          </span>
+        </li>
+        <li>
+          <strong>Password</strong>
+          <span>
+            {hasPassword
+              ? `On. Sign in with ${signInWith.join(' or ') || 'your sign-in details'} and your password.`
+              : 'Not set yet. Add one below to sign in without waiting for a code.'}
+          </span>
+        </li>
+      </ul>
+      {/* Lets password managers save the right username with the new password. */}
+      <input
+        type="text"
+        name="username"
+        autoComplete="username"
+        value={account.email ?? account.phone ?? ''}
+        readOnly
+        hidden
+        style={{ display: 'none' }}
+      />
+      {hasPassword && (
+        <label className="api-wide">
+          Current password
+          <input
+            name="currentPassword"
+            type="password"
+            autoComplete="current-password"
+            required
+            minLength={8}
+            maxLength={128}
+          />
+        </label>
+      )}
+      <label>
+        {hasPassword ? 'New password' : 'Password'}
+        <input
+          name="newPassword"
+          type="password"
+          autoComplete="new-password"
+          required
+          minLength={8}
+          maxLength={128}
+          aria-describedby="password-rules"
+        />
+      </label>
+      <label>
+        Repeat password
+        <input
+          name="confirmPassword"
+          type="password"
+          autoComplete="new-password"
+          required
+          minLength={8}
+          maxLength={128}
+          aria-invalid={mismatch || undefined}
+        />
+      </label>
+      <p id="password-rules" className="api-wide api-muted">
+        At least 8 characters. A few memorable words work well.
+      </p>
+      {mismatch && (
+        <p className="api-wide form-error" role="alert">
+          The two passwords don’t match.
+        </p>
+      )}
+      <button className="button button-primary" disabled={action.busy}>
+        {hasPassword ? 'Change password' : 'Add password'}
+      </button>
+      <ErrorNotice error={action.error} />
+      {action.message && (
+        <p className="api-wide profile-saved" role="status">
+          {action.message}
+        </p>
+      )}
+    </form>
   );
 }

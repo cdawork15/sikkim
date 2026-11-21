@@ -34,6 +34,7 @@ export type Account = {
   phone?: string | null;
   createdAt?: string;
   summary?: { bookings: number; saved: number; reels: number };
+  hasPassword?: boolean;
 };
 
 export type Session = {

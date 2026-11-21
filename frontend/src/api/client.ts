@@ -89,7 +89,11 @@ export class ApiClient {
     );
   }
 
-  login(credentials: { email: string; password: string }) {
+  /** Password sign-in with either the account's email or its mobile number. */
+  login(
+    credentials:
+      { email: string; password: string } | { phone: string; password: string },
+  ) {
     return this.authenticate('/auth/login', credentials);
   }
 

@@ -31,7 +31,7 @@ npm ci
 npm run dev                   # http://127.0.0.1:5173
 ```
 
-Sign in at `/welcome` with a one-time code. Locally the API prints codes in its log (`"event":"otp_dev_code"`). Give staff access with `npm run admin -- grant --email=… --role=admin|super` in `backend/`.
+Sign in at `/welcome` with a one-time code, or with a password once you have added one (Profile → Password & sign-in; mobile number or email). Locally the API prints codes in its log (`"event":"otp_dev_code"`). Set a staff password from the server with `npm run admin -- set-password --email=…`. Give staff access with `npm run admin -- grant --email=… --role=admin|super` in `backend/`.
 
 ## Account types
 

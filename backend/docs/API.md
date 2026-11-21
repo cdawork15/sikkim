@@ -25,7 +25,7 @@ Base path: `/v1`. Private requests need `Authorization: Bearer <token>`.
 
 ## Login
 
-Register with `displayName`, `email`, `password`; log in with `email`, `password`. Passwords are 8–128 characters. Keep tokens in memory. Sessions expire after 30 minutes; refresh rotates the token, up to 24 hours from sign-in. Reloading the frontend requires login again.
+Sign in with a one-time code (`POST /auth/otp/request`, then `/auth/otp/verify`) or a password. Log in with `password` plus **either** `email` or `phone` (local numbers get the default country code). Register with `displayName`, `email`, `password`; an email that already signs in with a code returns 409. Any signed-in account can add a password with `PUT /me/password` `{ newPassword }`; changing it also needs `currentPassword`, and signs out the account's other sessions. `GET /me` reports `hasPassword`. Passwords are 8–128 characters. Keep tokens in memory. Sessions expire after 30 minutes; refresh rotates the token, up to 24 hours from sign-in. Reloading the frontend requires login again.
 
 ## Your profile
 

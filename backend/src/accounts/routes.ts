@@ -104,15 +104,27 @@ export function registerAccounts(
     },
   }));
 
+  const password = { type: 'string', minLength: 8, maxLength: 128 };
   const credentials = {
     email: { type: 'string', minLength: 3, maxLength: 254, format: 'email' },
-    password: { type: 'string', minLength: 8, maxLength: 128 },
+    password,
+  };
+  const loginCredentials = {
+    ...credentials,
+    phone: { type: 'string', minLength: 6, maxLength: 20 },
   };
   const accountLimit = app.createRateLimit({
     max: 10,
     timeWindow: '15 minutes',
-    keyGenerator: (request) =>
-      tokenHash(normalizeEmail((request.body as Credentials).email)),
+    // Limit by the account being tried, whether named by email or mobile digits.
+    keyGenerator: (request) => {
+      const body = request.body as Credentials;
+      return tokenHash(
+        body.email
+          ? normalizeEmail(body.email)
+          : 'phone:' + (body.phone ?? '').replace(/\D/g, '').slice(-10),
+      );
+    },
   });
   const passwordOptions = {
     config: { rateLimit: false as const },
@@ -197,11 +209,30 @@ export function registerAccounts(
       ...passwordOptions,
       schema: {
         querystring: noQuery,
-        body: object(credentials, ['email', 'password']),
+        body: object(loginCredentials, ['password']),
       },
     },
     async (request) => ({
       data: await service.login(request.body, request.id),
+    }),
+  );
+  app.put<{ Body: { currentPassword?: string; newPassword: string } }>(
+    '/v1/me/password',
+    {
+      config: { rateLimit: { max: 10, timeWindow: '15 minutes' } },
+      schema: {
+        querystring: noQuery,
+        body: object({ currentPassword: password, newPassword: password }, [
+          'newPassword',
+        ]),
+      },
+    },
+    async (request) => ({
+      data: await service.setPassword(
+        bearerToken(request.headers.authorization),
+        request.body,
+        request.id,
+      ),
     }),
   );
 

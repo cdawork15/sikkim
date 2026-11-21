@@ -2,13 +2,23 @@ import type { PoolClient } from 'pg';
 import type { Database } from '../db/database.js';
 import { audit } from '../db/audit.js';
 import { AccountError } from './model.js';
+import { normalizeDestination } from './otp.js';
 import { hashPassword, normalizeEmail, verifyPassword } from './password.js';
 
-export type Credentials = { email: string; password: string };
-export type Registration = Credentials & { displayName: string };
+/** Sign in with a password and either the account's email or its mobile number. */
+export type Credentials = { email?: string; phone?: string; password: string };
+export type Registration = {
+  email: string;
+  password: string;
+  displayName: string;
+};
+
+export const loginFailed = () =>
+  new AccountError(401, 'LOGIN_FAILED', 'Sign-in details are incorrect.');
 
 export function passwordAccounts<T>(
   database: Database,
+  defaultCountryCode: string,
   createSession: (
     client: PoolClient,
     userId: string,
@@ -25,10 +35,11 @@ export function passwordAccounts<T>(
           "SELECT pg_advisory_xact_lock(hashtext('sikkim-password:' || $1))",
           [email],
         );
+        // One-time-code accounts own their email too: never create a second account for it.
         const existing = await client.query(
           `
             SELECT id FROM public.auth_identities
-            WHERE provider = 'password' AND subject = $1
+            WHERE provider IN ('password', 'email') AND subject = $1
           `,
           [email],
         );
@@ -65,6 +76,24 @@ export function passwordAccounts<T>(
       });
     },
     async login(input: Credentials, requestId: string) {
+      if (!input.email === !input.phone) {
+        throw new AccountError(
+          400,
+          'INVALID_REQUEST',
+          'Enter your email or your mobile number.',
+        );
+      }
+      // A malformed identifier fails like a wrong password, without revealing which.
+      let subject: string;
+      try {
+        subject = input.email
+          ? normalizeEmail(input.email)
+          : normalizeDestination('phone', input.phone!, defaultCountryCode);
+      } catch {
+        await verifyPassword(input.password, undefined);
+        throw loginFailed();
+      }
+      const providers = input.email ? ['password', 'email'] : ['phone'];
       return database.transaction(async (client) => {
         // Use the same account-before-session lock order as refresh/logout/deletion.
         const user = (
@@ -80,10 +109,12 @@ export function passwordAccounts<T>(
               FROM public.auth_identities a
               JOIN public.users u ON u.id = a.user_id
               JOIN public.auth_passwords p ON p.user_id = u.id
-              WHERE a.provider = 'password' AND a.subject = $1
+              WHERE a.provider = ANY($1) AND a.subject = $2
+              ORDER BY a.created_at
+              LIMIT 1
               FOR UPDATE OF u
             `,
-            [normalizeEmail(input.email)],
+            [providers, subject],
           )
         ).rows[0];
         // Unknown and disabled accounts still do the same password work.
@@ -92,11 +123,7 @@ export function passwordAccounts<T>(
           user?.passwordHash,
         );
         if (!matches || !user || user.isDemo || user.status !== 'active') {
-          throw new AccountError(
-            401,
-            'LOGIN_FAILED',
-            'Email or password is incorrect.',
-          );
+          throw loginFailed();
         }
         return createSession(client, user.id, requestId);
       });

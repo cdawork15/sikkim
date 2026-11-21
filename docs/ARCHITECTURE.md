@@ -71,6 +71,19 @@ sequenceDiagram
   W-->>P: new account → name and interests (S02)
 ```
 
+### Or with a password
+
+Every account can also add a password (Profile → Password & sign-in), then sign in with its mobile number **or** email and that password. The one-time code keeps working.
+
+```mermaid
+flowchart LR
+  C["Signed in with a code"] --> S["PUT /me/password<br/>(current password needed to change)"]
+  S --> O["Other devices signed out"]
+  L["POST /auth/login<br/>email or phone + password"] --> F{"Identity found<br/>and password matches?"}
+  F -- yes --> X["Session"]
+  F -- no --> E["401 LOGIN_FAILED<br/>(same answer either way)"]
+```
+
 ## Account types
 
 ```mermaid

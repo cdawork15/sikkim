@@ -189,6 +189,133 @@ test('OTP sign-in, account types and community reels', async (t) => {
     },
   );
 
+  await t.test(
+    'code accounts can add a password and use either way to sign in',
+    async () => {
+      await clearCooldown();
+      const login = (payload: Record<string, string>) =>
+        app.inject({
+          method: 'POST',
+          remoteAddress: nextIp(),
+          url: '/v1/auth/login',
+          payload,
+        });
+      const setPassword = (
+        headers: Record<string, string>,
+        payload: Record<string, string>,
+      ) =>
+        app.inject({
+          method: 'PUT',
+          url: '/v1/me/password',
+          headers,
+          payload,
+        });
+      const phoneUser = await signIn('phone', '98000 55555', 'Karma');
+      assert.equal(phoneUser.user.hasPassword, false);
+      await clearCooldown();
+      const other = await signIn('phone', '9800055555');
+      await clearCooldown();
+      assert.equal(
+        (await login({ phone: '9800055555', password: 'mountain path 1' }))
+          .statusCode,
+        401,
+        'no password yet',
+      );
+
+      const added = await setPassword(phoneUser.headers, {
+        newPassword: 'mountain path 1',
+      });
+      assert.equal(added.statusCode, 200, added.body);
+      assert.equal(added.json().data.hasPassword, true);
+      // Other devices are signed out; this one stays signed in.
+      assert.equal(
+        (await app.inject({ url: '/v1/me', headers: other.headers }))
+          .statusCode,
+        401,
+      );
+      assert.equal(
+        (await app.inject({ url: '/v1/me', headers: phoneUser.headers }))
+          .statusCode,
+        200,
+      );
+
+      for (const phone of ['9800055555', '+91 98000 55555', '098000 55555']) {
+        const ok = await login({ phone, password: 'mountain path 1' });
+        assert.equal(ok.statusCode, 200, `${phone}: ${ok.body}`);
+        assert.equal(ok.json().data.user.id, phoneUser.user.id);
+      }
+      const wrong = await login({
+        phone: '9800055555',
+        password: 'wrong pass 22',
+      });
+      assert.equal(wrong.json().error.code, 'LOGIN_FAILED');
+      const malformed = await login({
+        phone: 'abcdefg',
+        password: 'mountain path 1',
+      });
+      assert.equal(malformed.json().error.code, 'LOGIN_FAILED');
+      assert.equal(
+        (
+          await login({
+            phone: '9800055555',
+            email: 'x@example.test',
+            password: 'mountain path 1',
+          })
+        ).statusCode,
+        400,
+      );
+      // The code still works after adding a password.
+      await clearCooldown();
+      const again = await signIn('phone', '9800055555');
+      assert.equal(again.user.id, phoneUser.user.id);
+
+      // Changing needs the current password.
+      const missing = await setPassword(again.headers, {
+        newPassword: 'river valley 2',
+      });
+      assert.equal(missing.json().error.code, 'PASSWORD_INCORRECT');
+      const changed = await setPassword(again.headers, {
+        currentPassword: 'mountain path 1',
+        newPassword: 'river valley 2',
+      });
+      assert.equal(changed.statusCode, 200, changed.body);
+      assert.equal(
+        (await login({ phone: '9800055555', password: 'mountain path 1' }))
+          .statusCode,
+        401,
+      );
+      assert.equal(
+        (await login({ phone: '9800055555', password: 'river valley 2' }))
+          .statusCode,
+        200,
+      );
+
+      // Email code accounts sign in with their email and the new password.
+      await clearCooldown();
+      const emailUser = await signIn('email', 'dorjee@example.test', 'Dorjee');
+      await setPassword(emailUser.headers, { newPassword: 'prayer flags 3' });
+      const viaEmail = await login({
+        email: 'Dorjee@Example.test',
+        password: 'prayer flags 3',
+      });
+      assert.equal(viaEmail.statusCode, 200, viaEmail.body);
+      assert.equal(viaEmail.json().data.user.id, emailUser.user.id);
+
+      // Password sign-up cannot take over an email that already signs in with a code.
+      const duplicate = await app.inject({
+        method: 'POST',
+        remoteAddress: nextIp(),
+        url: '/v1/auth/register',
+        payload: {
+          displayName: 'Someone else',
+          email: 'dorjee@example.test',
+          password: 'another pass 4',
+        },
+      });
+      assert.equal(duplicate.statusCode, 409);
+    },
+  );
+
   await t.test('suspended accounts cannot sign in with a code', async () => {
     await clearCooldown();
     const person = await signIn('email', 'blocked@example.test');
