@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import type { BookingSlot } from '../api/bookings';
+import type { BookingSlot, BookingSummary } from '../api/bookings';
 import { bookingDate, bookingTime, canChoose } from '../api/bookings';
-import { useSession } from '../api/react';
+import { useResource, useSession } from '../api/react';
 import { Icon } from '../components/Icon';
 import { PagedList, RequireAccount } from './shared';
 
@@ -52,6 +52,43 @@ export function SlotTime({
     </>
   );
 }
+// The signed-in traveller's upcoming bookings for one experience. A traveller
+// can hold one booking per date; the API refuses a second (ALREADY_BOOKED).
+export function useUpcomingBookings(experienceId: string | undefined) {
+  const { user } = useSession();
+  const result = useResource<BookingSummary[]>(
+    experienceId && user
+      ? '/me/bookings?status=upcoming&experienceId=' +
+          encodeURIComponent(experienceId)
+      : null,
+    true,
+  );
+  return result.data ?? [];
+}
+export function AlreadyBooked({
+  bookings,
+  children,
+}: {
+  bookings: BookingSummary[];
+  children?: ReactNode;
+}) {
+  if (!bookings.length) return null;
+  return (
+    <div className="booking-hold" role="status">
+      <h2>You’ve already booked this experience.</h2>
+      {bookings.map((item) => (
+        <p key={item.id}>
+          <SlotTime slot={item} /> · {item.quantity}{' '}
+          {item.quantity === 1 ? 'person' : 'people'} ·{' '}
+          <Link className="text-link" to={'/essentials/bookings/' + item.id}>
+            View booking and ticket
+          </Link>
+        </p>
+      ))}
+      {children}
+    </div>
+  );
+}
 export function SlotPicker({
   experienceId,
   quantity,
@@ -59,6 +96,7 @@ export function SlotPicker({
   onSelect,
   disabled = false,
   excludeId,
+  bookedSlotIds = [],
   policy,
 }: {
   experienceId: string;
@@ -67,6 +105,7 @@ export function SlotPicker({
   onSelect: (slot: BookingSlot) => void;
   disabled?: boolean;
   excludeId?: string;
+  bookedSlotIds?: string[];
   policy?: { cancellationHours: number; rescheduleHours: number };
 }) {
   return (
@@ -76,9 +115,11 @@ export function SlotPicker({
       <PagedList<BookingSlot>
         path={'/experiences/' + experienceId + '/slots'}
         render={(slot) => {
+          const booked = bookedSlotIds.includes(slot.id);
           const allowed =
             canChoose(slot, quantity) &&
             slot.id !== excludeId &&
+            !booked &&
             (!policy ||
               (slot.cancellationHours === policy.cancellationHours &&
                 slot.rescheduleHours === policy.rescheduleHours));
@@ -105,9 +146,11 @@ export function SlotPicker({
                     ? 'Paid booking is not available yet'
                     : slot.id === excludeId
                       ? 'Your current date'
-                      : allowed
-                        ? `${slot.availablePlaces} places left · Free`
-                        : 'Unavailable for this booking'}
+                      : booked
+                        ? 'You’re already booked on this date'
+                        : allowed
+                          ? `${slot.availablePlaces} places left · Free`
+                          : 'Unavailable for this booking'}
                 </small>
               </span>
             </label>

@@ -19,6 +19,7 @@ import { createDatabase, type Database } from './db/database.js';
 import { registerAccounts } from './accounts/routes.js';
 import { AccountError } from './accounts/model.js';
 import type { OtpDelivery } from './accounts/otp.js';
+import { sesDelivery } from './accounts/ses.js';
 
 const errorSchema = {
   type: 'object',
@@ -225,12 +226,14 @@ export async function buildApp(
   // needs an email/SMS provider (see README) before OTP_DELIVERY is enabled.
   const otpDelivery: OtpDelivery =
     options.otpDelivery ??
-    (async ({ channel, destination, code }) => {
-      app.log.info(
-        { event: 'otp_dev_code', channel, destination, code },
-        'Development sign-in code',
-      );
-    });
+    (config.otp.delivery === 'email'
+      ? sesDelivery(config.otp.fromAddress!, config.otp.region!, app.log)
+      : async ({ channel, destination, code }) => {
+          app.log.info(
+            { event: 'otp_dev_code', channel, destination, code },
+            'Development sign-in code',
+          );
+        });
   registerAccounts(app, database, config, otpDelivery);
   registerHosts(app, database, config);
   // The CRM AI assistant is off unless AI_PROVIDER is set (tests inject one).

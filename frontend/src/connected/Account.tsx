@@ -12,6 +12,7 @@ import {
   ErrorNotice,
   isStaff,
   landingFor,
+  signInDestination,
   Loading,
   RequireAccount,
 } from './shared';
@@ -21,7 +22,7 @@ import { formatPhone, initialOf, roleLabel } from '../components/ProfileMenu';
 export function Welcome() {
   const api = useApi();
   const settings = useResource<Settings>('/settings');
-  const { user } = useSession();
+  const { user, restoring } = useSession();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const [signUp, setSignUp] = useState(false);
@@ -30,8 +31,7 @@ export function Welcome() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Error>();
   const submitting = useRef(false);
-  const next = params.get('next') ?? '/account';
-  const destination = /^\/(?![\/\\])/.test(next) ? next : '/account';
+  const destination = signInDestination(params.get('next'));
   const otpMode = settings.data?.auth.mode === 'otp';
   return (
     <div className="page interior-page">
@@ -76,7 +76,9 @@ export function Welcome() {
           {settings.loading && <Loading />}
           <ErrorNotice error={settings.error} retry={settings.reload} />
           <ErrorNotice error={error} />
-          {user ? (
+          {restoring ? (
+            <Loading />
+          ) : user ? (
             <Link className="button button-primary" to={destination}>
               Continue as {user.displayName}
             </Link>

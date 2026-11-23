@@ -6,6 +6,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { Config } from '../config.js';
 import type { Database } from '../db/database.js';
 import { accountService } from './service.js';
+import { sessionCookie } from './session-cookie.js';
 import {
   AccountError,
   bearerToken,
@@ -17,6 +18,7 @@ import {
   type DemoAccount,
   type PreferencePatch,
   type ProfilePatch,
+  unauthenticated,
 } from './model.js';
 
 const noQuery = { type: 'object', additionalProperties: false, properties: {} };
@@ -52,6 +54,17 @@ export function registerAccounts(
   deliver?: OtpDelivery,
 ) {
   const service = accountService(database, config, deliver);
+  const cookie = sessionCookie(config);
+  // Every successful sign-in also stores the session in the HttpOnly cookie.
+  const signedIn = <
+    T extends { accessToken: string; absoluteExpiresAt: unknown },
+  >(
+    reply: FastifyReply,
+    session: T,
+  ) => {
+    cookie.set(reply, session.accessToken, session.absoluteExpiresAt);
+    return session;
+  };
   app.get('/v1/interests', { schema: { querystring: noQuery } }, async () => ({
     data: await service.interests(),
   }));
@@ -157,9 +170,9 @@ export function registerAccounts(
       },
     },
     async (request, reply) =>
-      reply
-        .code(201)
-        .send({ data: await service.register(request.body, request.id) }),
+      reply.code(201).send({
+        data: signedIn(reply, await service.register(request.body, request.id)),
+      }),
   );
   // Passwordless sign-in and sign-up with a one-time code by email or SMS.
   const otpLimit = {
@@ -199,8 +212,8 @@ export function registerAccounts(
         ),
       },
     },
-    async (request) => ({
-      data: await service.verifyCode(request.body, request.id),
+    async (request, reply) => ({
+      data: signedIn(reply, await service.verifyCode(request.body, request.id)),
     }),
   );
   app.post<{ Body: Credentials }>(
@@ -212,8 +225,8 @@ export function registerAccounts(
         body: object(loginCredentials, ['password']),
       },
     },
-    async (request) => ({
-      data: await service.login(request.body, request.id),
+    async (request, reply) => ({
+      data: signedIn(reply, await service.login(request.body, request.id)),
     }),
   );
   app.put<{ Body: { currentPassword?: string; newPassword: string } }>(
@@ -263,7 +276,10 @@ export function registerAccounts(
           );
         }
         return reply.code(201).send({
-          data: await service.demoSession(request.body.account, request.id),
+          data: signedIn(
+            reply,
+            await service.demoSession(request.body.account, request.id),
+          ),
         });
       },
     );
@@ -272,14 +288,37 @@ export function registerAccounts(
   app.post(
     '/v1/auth/refresh',
     { schema: { querystring: noQuery }, preValidation: noBody },
-    async (request) => ({
-      data: await service.refresh(token(request), request.id),
+    async (request, reply) => ({
+      data: signedIn(reply, await service.refresh(token(request), request.id)),
     }),
+  );
+  // After a reload the page has no token: the HttpOnly cookie restores it.
+  app.post(
+    '/v1/auth/resume',
+    {
+      schema: { querystring: noQuery },
+      preValidation: noBody,
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      const saved = cookie.read(request);
+      try {
+        if (!saved) throw unauthenticated();
+        return {
+          data: signedIn(reply, await service.resume(saved, request.id)),
+        };
+      } catch (error) {
+        if (error instanceof AccountError && error.statusCode === 401)
+          cookie.clear(reply);
+        throw error;
+      }
+    },
   );
   app.post(
     '/v1/auth/logout',
     { schema: { querystring: noQuery }, preValidation: noBody },
     async (request, reply) => {
+      cookie.clear(reply);
       await service.logout(token(request), false, request.id);
       return reply.code(204).send();
     },
@@ -288,6 +327,7 @@ export function registerAccounts(
     '/v1/auth/logout-all',
     { schema: { querystring: noQuery }, preValidation: noBody },
     async (request, reply) => {
+      cookie.clear(reply);
       await service.logout(token(request), true, request.id);
       return reply.code(204).send();
     },

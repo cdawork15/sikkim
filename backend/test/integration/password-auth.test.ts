@@ -318,6 +318,94 @@ test('password accounts against isolated PostgreSQL', async (t) => {
   );
 
   await t.test(
+    'a browser stays signed in across reloads until it signs out',
+    async () => {
+      const cookieOf = (response: { headers: Record<string, unknown> }) => {
+        const header = String(response.headers['set-cookie'] ?? '');
+        return {
+          header,
+          value: /^sx_session=([^;]*)/.exec(header)?.[1] ?? '',
+        };
+      };
+      const resume = (cookie?: string) =>
+        app.inject({
+          method: 'POST',
+          url: '/v1/auth/resume',
+          headers: cookie ? { cookie: `sx_session=${cookie}` } : {},
+          remoteAddress: `127.1.0.${ip++}`,
+        });
+      const signedUp = await post('register', credentials());
+      assert.equal(signedUp.statusCode, 201, signedUp.body);
+      const first = cookieOf(signedUp);
+      assert.equal(first.value, signedUp.json().data.accessToken);
+      assert.match(first.header, /HttpOnly/);
+      assert.match(first.header, /SameSite=Strict/);
+      assert.match(first.header, /Path=\/v1\/auth(;|$)/);
+      const session = signedUp.json().data;
+      const days = (iso: string) => (Date.parse(iso) - Date.now()) / 86400000;
+      assert.ok(days(session.expiresAt) > 29, session.expiresAt);
+      assert.ok(
+        days(session.absoluteExpiresAt) > 364,
+        session.absoluteExpiresAt,
+      );
+
+      // A reload: no token in memory, only the cookie.
+      const restored = await resume(first.value);
+      assert.equal(restored.statusCode, 200, restored.body);
+      const data = restored.json().data;
+      assert.equal(data.user.id, session.user.id);
+      assert.notEqual(data.accessToken, first.value);
+      assert.equal(cookieOf(restored).value, data.accessToken);
+      // The old token was rotated away and no longer works anywhere.
+      assert.equal((await resume(first.value)).statusCode, 401);
+      assert.equal(
+        (await app.inject({ url: '/v1/me', headers: headers(first.value) }))
+          .statusCode,
+        401,
+      );
+      assert.equal(
+        (
+          await app.inject({
+            url: '/v1/me',
+            headers: headers(data.accessToken),
+          })
+        ).statusCode,
+        200,
+      );
+      // Renewing with the bearer token keeps the cookie in step.
+      const renewed = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/refresh',
+        headers: headers(data.accessToken),
+      });
+      assert.equal(renewed.statusCode, 200, renewed.body);
+      assert.equal(cookieOf(renewed).value, renewed.json().data.accessToken);
+
+      // Signing out ends the session and clears the cookie.
+      const out = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/logout',
+        headers: headers(renewed.json().data.accessToken),
+      });
+      assert.equal(out.statusCode, 204, out.body);
+      assert.match(cookieOf(out).header, /^sx_session=;.*Max-Age=0/);
+      const after = await resume(renewed.json().data.accessToken);
+      assert.equal(after.statusCode, 401, after.body);
+      assert.match(cookieOf(after).header, /Max-Age=0/);
+      // No cookie or a malformed one is simply "signed out".
+      assert.equal((await resume()).statusCode, 401);
+      assert.equal((await resume('not a token')).statusCode, 401);
+      // Bearer tokens are never accepted in place of the cookie.
+      const bearerOnly = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/resume',
+        headers: headers(data.accessToken),
+      });
+      assert.equal(bearerOnly.statusCode, 401);
+    },
+  );
+
+  await t.test(
     'one IP cannot bypass throttling by changing email or endpoint',
     async () => {
       for (let i = 0; i < 10; i++) {

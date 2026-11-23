@@ -17,6 +17,7 @@ import {
   lockExperience,
   requireBeforeCutoff,
   requireCapacity,
+  requireNotBooked,
   requireUnattended,
   revokeTicket,
   slot,
@@ -78,6 +79,7 @@ export async function createHold(
   await lockExperience(client, selected.experience_id);
   selected = await slot(client, input.slotId);
   await validSlot(client, selected, input.quantity);
+  await requireNotBooked(client, userId, selected.id);
   await requireCapacity(client, selected, input.quantity);
   await client.query(
     "UPDATE public.seat_holds SET status='expired' WHERE slot_id=$1 AND status='active' AND expires_at<=clock_timestamp()",
@@ -157,6 +159,8 @@ export async function confirm(
     );
   if (input.guests.length !== hold.quantity)
     throw invalid('Add one guest name for each reserved place.');
+  // A second tab may have confirmed another hold for this date meanwhile.
+  await requireNotBooked(client, userId, selected.id);
   const experience = await validSlot(client, selected, hold.quantity);
   // The hold is still counted. Require zero additional seats, not its quantity again.
   await requireCapacity(client, selected, 0);
@@ -307,6 +311,7 @@ export async function reschedule(
   if (target.experience_id !== current.experience_id)
     throw invalid('Choose another date for the same experience.');
   await validSlot(client, target, current.quantity);
+  await requireNotBooked(client, userId, target.id, id);
   // Keep the original policy and price. Different terms need a new booking.
   if (
     target.policy_id !== current.snapshot.policy.id ||

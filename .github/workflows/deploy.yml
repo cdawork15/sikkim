@@ -1,0 +1,125 @@
+name: Deploy
+# Every push to main: backend checks -> frontend checks + build -> ship the
+# release to the AWS server (see deploy/aws/README.md). Settings come from the
+# "production" environment's variables, which deploy/aws/setup.sh fills in.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  backend-checks:
+    uses: ./.github/workflows/backend.yml
+    permissions:
+      contents: read
+      pull-requests: read
+
+  release:
+    needs: backend-checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    environment:
+      name: production
+      url: ${{ vars.APP_URL }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      RELEASE_BUCKET: ${{ vars.RELEASE_BUCKET }}
+      INSTANCE_ID: ${{ vars.INSTANCE_ID }}
+      DISTRIBUTION_ID: ${{ vars.DISTRIBUTION_ID }}
+      SERVER_CONFIG_PARAM: ${{ vars.SERVER_CONFIG_PARAM }}
+    steps:
+      - name: Check deployment settings
+        run: |
+          for name in AWS_REGION RELEASE_BUCKET INSTANCE_ID DISTRIBUTION_ID SERVER_CONFIG_PARAM; do
+            [ -n "${!name}" ] || { echo "::error::Production variable $name is not set. Run deploy/aws/setup.sh."; exit 1; }
+          done
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+      - name: Frontend checks and build
+        working-directory: frontend
+        env:
+          VITE_DATA_MODE: api
+          VITE_API_BASE_URL: /v1
+        run: |
+          npm ci
+          npm run format:check
+          npm test
+          npm run build
+      - name: Backend build
+        working-directory: backend
+        run: |
+          npm ci
+          npm run build
+      - name: Package release
+        run: |
+          mkdir -p release/frontend release/backend release/deploy/aws
+          cp -R frontend/dist/. release/frontend/
+          cp -R backend/dist backend/migrations backend/package.json backend/package-lock.json release/backend/
+          cp -R deploy/aws/server release/deploy/aws/
+          echo "$GITHUB_SHA" > release/REVISION
+          tar -czf release.tar.gz -C release .
+          ls -lh release.tar.gz
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Upload release
+        run: aws s3 cp release.tar.gz "s3://$RELEASE_BUCKET/releases/$GITHUB_SHA.tar.gz" --only-show-errors
+      - name: Install on the server
+        run: |
+          script=$(cat <<EOF
+          set -euo pipefail
+          export PATH=/usr/local/bin:/snap/bin:\$PATH AWS_REGION=$AWS_REGION
+          rel=/opt/sikkim/releases/$GITHUB_SHA
+          if [ ! -d "\$rel" ]; then
+            tmp=\$(mktemp -d)
+            aws s3 cp "s3://$RELEASE_BUCKET/releases/$GITHUB_SHA.tar.gz" "\$tmp/release.tar.gz" --only-show-errors
+            mkdir -p /opt/sikkim/releases "\$rel.partial"
+            tar -xzf "\$tmp/release.tar.gz" -C "\$rel.partial"
+            mv "\$rel.partial" "\$rel"
+            rm -rf "\$tmp"
+          fi
+          bash "\$rel/deploy/aws/server/install.sh" "$SERVER_CONFIG_PARAM"
+          bash "\$rel/deploy/aws/server/release.sh" "\$rel"
+          EOF
+          )
+          command_id=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "deploy ${GITHUB_SHA::7}" \
+            --parameters "$(jq -n --arg s "$script" '{commands: [$s], executionTimeout: ["1800"]}')" \
+            --query Command.CommandId --output text)
+          echo "SSM command $command_id"
+          status=Pending
+          for _ in $(seq 1 200); do
+            sleep 10
+            status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in Pending|InProgress|Delayed) ;; *) break ;; esac
+          done
+          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
+            --query StandardOutputContent --output text
+          echo "--- stderr ---"
+          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
+            --query StandardErrorContent --output text
+          echo "Status: $status"
+          [ "$status" = Success ]
+      - name: Refresh CloudFront
+        run: aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths '/*' --query Invalidation.Id --output text
+      - name: Smoke test
+        run: |
+          curl -fsS --retry 5 --retry-delay 5 --retry-all-errors "${{ vars.APP_URL }}/v1/health/ready"
+          curl -fsS -o /dev/null "${{ vars.APP_URL }}/"

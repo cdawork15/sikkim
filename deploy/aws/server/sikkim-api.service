@@ -1,0 +1,42 @@
+[Unit]
+Description=Sikkim Experiences API
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor=/var/lib/sikkim
+
+[Service]
+Type=simple
+User=sikkim
+Group=sikkim
+WorkingDirectory=/opt/sikkim/current/backend
+EnvironmentFile=/etc/sikkim/api.env
+ExecStart=/usr/local/bin/node dist/server.js
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+UMask=0077
+LimitNOFILE=65536
+MemoryMax=1400M
+
+# Hardening: the API may write only to the media directory.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/sikkim/media
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

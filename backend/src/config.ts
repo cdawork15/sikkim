@@ -149,13 +149,31 @@ export function loadConfig(env: Environment = process.env) {
   // One-time sign-in codes. 'console' writes codes to the server log and is
   // for local development only; production needs a real email/SMS provider.
   const otpDelivery = env.OTP_DELIVERY ?? 'disabled';
-  if (!['disabled', 'console'].includes(otpDelivery)) {
-    throw new ConfigurationError('OTP_DELIVERY must be disabled or console');
+  if (!['disabled', 'console', 'email'].includes(otpDelivery)) {
+    throw new ConfigurationError(
+      'OTP_DELIVERY must be disabled, console or email',
+    );
   }
   if (otpDelivery === 'console' && production) {
     throw new ConfigurationError(
       'OTP_DELIVERY=console is for local development only',
     );
+  }
+  // Email delivery uses Amazon SES. Credentials come from the AWS provider
+  // chain (the instance role), so only a verified sender and region are read.
+  let otpFromAddress: string | undefined;
+  let otpRegion: string | undefined;
+  if (otpDelivery === 'email') {
+    otpFromAddress = env.SES_FROM_ADDRESS;
+    if (!otpFromAddress) {
+      throw new ConfigurationError(
+        'OTP_DELIVERY=email requires SES_FROM_ADDRESS (a verified sender)',
+      );
+    }
+    otpRegion = env.AWS_REGION ?? env.AWS_DEFAULT_REGION;
+    if (!otpRegion) {
+      throw new ConfigurationError('OTP_DELIVERY=email requires AWS_REGION');
+    }
   }
   const otpSecret = env.OTP_SECRET ?? '';
   if (otpDelivery !== 'disabled' && otpSecret.length < 32) {
@@ -207,14 +225,17 @@ export function loadConfig(env: Environment = process.env) {
   return {
     media,
     ai: aiConfig(env),
+    session: sessionConfig(env, production),
     requestsPerMinute: +requestLimit,
     mode,
     demoAuth,
     hostVerification: hostVerification as 'disabled' | 'manual',
     otp: {
-      delivery: otpDelivery as 'disabled' | 'console',
+      delivery: otpDelivery as 'disabled' | 'console' | 'email',
       secret: otpSecret,
       defaultCountryCode: countryCode,
+      fromAddress: otpFromAddress,
+      region: otpRegion,
     },
     production,
     connectionString,
@@ -225,6 +246,39 @@ export function loadConfig(env: Environment = process.env) {
     databaseCaFile: env.DB_CA_FILE,
     trustProxy,
     logLevel: mode === 'test' ? 'silent' : 'info',
+  };
+}
+
+// Sign-in sessions last until the person signs out, as long as they come back
+// within SESSION_IDLE_DAYS; SESSION_MAX_DAYS caps any session (browsers cap
+// cookies at 400 days). The session cookie is Secure unless explicitly turned
+// off for a plain-HTTP test server.
+export function sessionConfig(env: Environment, production: boolean) {
+  const days = (name: string, fallback: string) => {
+    const value = env[name] ?? fallback;
+    if (!/^\d+$/.test(value) || +value < 1 || +value > 400) {
+      throw new ConfigurationError(`${name} must be 1–400 days`);
+    }
+    return +value;
+  };
+  const idleDays = days('SESSION_IDLE_DAYS', '30');
+  const maxDays = days('SESSION_MAX_DAYS', '365');
+  if (idleDays > maxDays) {
+    throw new ConfigurationError(
+      'SESSION_IDLE_DAYS cannot exceed SESSION_MAX_DAYS',
+    );
+  }
+  const secure = env.SESSION_COOKIE_SECURE ?? (production ? 'true' : 'false');
+  if (!['true', 'false'].includes(secure)) {
+    throw new ConfigurationError('SESSION_COOKIE_SECURE must be true or false');
+  }
+  if (production && secure !== 'true') {
+    throw new ConfigurationError('Production requires a Secure session cookie');
+  }
+  return {
+    idleSeconds: idleDays * 86400,
+    maxSeconds: maxDays * 86400,
+    cookieSecure: secure === 'true',
   };
 }
 

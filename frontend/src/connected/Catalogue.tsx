@@ -1,5 +1,6 @@
 import { ExperienceActions } from './ExperienceActions';
 import { ExperienceGallery } from './Media';
+import { AlreadyBooked, useUpcomingBookings } from './bookingShared';
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAction, useApi, useResource, useSession } from '../api/react';
@@ -436,6 +437,7 @@ export function Detail() {
     '/experiences/' + encodeURIComponent(slug),
   );
   const item = result.data;
+  const booked = useUpcomingBookings(item?.id);
   return (
     <div className="page interior-page">
       <Link to="/explore?view=list">← All experiences</Link>
@@ -466,12 +468,16 @@ export function Detail() {
               <h2>
                 {money(item.pricePaise)} <small>/ person</small>
               </h2>
+              <AlreadyBooked bookings={booked} />
               {item.availability.bookable ? (
                 <Link
-                  className="button button-primary"
+                  className={
+                    'button ' +
+                    (booked.length ? 'button-secondary' : 'button-primary')
+                  }
                   to={'/experiences/' + encodeURIComponent(item.slug) + '/book'}
                 >
-                  Choose a date
+                  {booked.length ? 'Book another date' : 'Choose a date'}
                 </Link>
               ) : (
                 <button className="button button-primary" disabled>

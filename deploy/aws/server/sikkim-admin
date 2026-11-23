@@ -1,0 +1,13 @@
+#!/bin/bash
+# Runs the backend admin CLI (npm run admin) on the server as the API user,
+# with the API's environment. Examples (from an SSM session):
+#   sudo sikkim-admin list
+#   sudo sikkim-admin grant --email=you@example.com --role=super
+#   printf '%s' "$PASSWORD" | sudo sikkim-admin set-password --email=you@example.com
+set -euo pipefail
+[ "$(id -u)" -eq 0 ] || { echo 'Run with sudo.' >&2; exit 1; }
+exec systemd-run --quiet --wait --pipe --collect \
+  --uid=sikkim --gid=sikkim \
+  -p EnvironmentFile=/etc/sikkim/api.env \
+  -p WorkingDirectory=/opt/sikkim/current/backend \
+  /usr/local/bin/node dist/bin/admin.js "$@"

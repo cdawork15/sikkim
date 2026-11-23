@@ -3,7 +3,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { OtpChallenge } from '../api/client';
 import { useApi, useResource } from '../api/react';
 import type { Interest } from '../api/types';
-import { ErrorNotice, landingFor, RequireAccount } from './shared';
+import {
+  ErrorNotice,
+  landingFor,
+  RequireAccount,
+  signInDestination,
+} from './shared';
 
 type Step = 'start' | 'code';
 
@@ -204,8 +209,7 @@ export function OtpSignIn({
 /** Prototype S02: name and interests right after a new account's first code. */
 export function Onboarding() {
   const [params] = useSearchParams();
-  const next = params.get('next') ?? '/';
-  const destination = /^\/(?![\/\\])/.test(next) ? next : '/';
+  const destination = signInDestination(params.get('next'));
   return (
     <div className="page interior-page onboarding-page">
       <RequireAccount>

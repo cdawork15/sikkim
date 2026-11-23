@@ -99,10 +99,13 @@ async function profile(client: PoolClient, userId: string) {
   };
 }
 
+type SessionLifetime = Config['session'];
+
 async function createSession(
   client: PoolClient,
   userId: string,
   requestId: string,
+  lifetime: SessionLifetime,
 ) {
   await client.query(
     `
@@ -132,13 +135,18 @@ async function createSession(
         )
         VALUES (
           $1, $2,
-          CURRENT_TIMESTAMP + interval '30 minutes',
-          CURRENT_TIMESTAMP + interval '24 hours'
+          CURRENT_TIMESTAMP + make_interval(secs => $3),
+          CURRENT_TIMESTAMP + make_interval(secs => $4)
         )
         RETURNING id, expires_at AS "expiresAt",
           absolute_expires_at AS "absoluteExpiresAt"
       `,
-      [userId, tokenHash(accessToken)],
+      [
+        userId,
+        tokenHash(accessToken),
+        lifetime.idleSeconds,
+        lifetime.maxSeconds,
+      ],
     )
   ).rows[0];
   await audit(
@@ -172,10 +180,49 @@ export function accountService(
   },
 ) {
   const authenticated = accountAccess(database, config);
+  const startSession = (
+    client: PoolClient,
+    userId: string,
+    requestId: string,
+  ) => createSession(client, userId, requestId, config.session);
+  // Swap the session's token for a new one and push its idle expiry forward.
+  const renew = async (
+    client: PoolClient,
+    p: { userId: string; sessionId: string },
+    requestId: string,
+  ) => {
+    const accessToken = newToken();
+    const session = (
+      await client.query(
+        `
+          UPDATE public.auth_sessions
+          SET
+            token_hash = $2,
+            expires_at = LEAST(
+              CURRENT_TIMESTAMP + make_interval(secs => $3),
+              absolute_expires_at
+            )
+          WHERE id = $1
+          RETURNING expires_at AS "expiresAt",
+            absolute_expires_at AS "absoluteExpiresAt"
+        `,
+        [p.sessionId, tokenHash(accessToken), config.session.idleSeconds],
+      )
+    ).rows[0];
+    await audit(
+      client,
+      p.userId,
+      'session.renewed',
+      requestId,
+      'session',
+      p.sessionId,
+    );
+    return { accessToken, tokenType: 'Bearer', ...session };
+  };
 
   return {
-    ...passwordAccounts(database, config.otp.defaultCountryCode, createSession),
-    ...otpAccounts(database, config, deliver, createSession),
+    ...passwordAccounts(database, config.otp.defaultCountryCode, startSession),
+    ...otpAccounts(database, config, deliver, startSession),
     interests: () =>
       database.transaction(
         async (client) =>
@@ -262,7 +309,7 @@ export function accountService(
             'This account cannot sign in.',
           );
         }
-        return createSession(client, user.id, requestId);
+        return startSession(client, user.id, requestId);
       });
     },
 
@@ -416,34 +463,14 @@ export function accountService(
       }),
 
     refresh: (token: string, requestId: string) =>
+      authenticated(token, (client, p) => renew(client, p, requestId)),
+
+    /** Restores a signed-in browser after a reload, from its session cookie. */
+    resume: (token: string, requestId: string) =>
       authenticated(token, async (client, p) => {
-        const accessToken = newToken();
-        const session = (
-          await client.query(
-            `
-              UPDATE public.auth_sessions
-              SET
-                token_hash = $2,
-                expires_at = LEAST(
-                  CURRENT_TIMESTAMP + interval '30 minutes',
-                  absolute_expires_at
-                )
-              WHERE id = $1
-              RETURNING expires_at AS "expiresAt",
-                absolute_expires_at AS "absoluteExpiresAt"
-            `,
-            [p.sessionId, tokenHash(accessToken)],
-          )
-        ).rows[0];
-        await audit(
-          client,
-          p.userId,
-          'session.renewed',
-          requestId,
-          'session',
-          p.sessionId,
-        );
-        return { accessToken, tokenType: 'Bearer', ...session };
+        const session = await renew(client, p, requestId);
+        const user = await profile(client, p.userId);
+        return { ...session, demo: user.isDemo, user };
       }),
 
     logout: (token: string, all: boolean, requestId: string) =>

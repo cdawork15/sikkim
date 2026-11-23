@@ -28,7 +28,26 @@ export function EventDetail() {
   const membership = state.memberships[e.id];
   const count = joinedCount(state, e);
   const full = count >= e.capacity;
+  // Signed-in Community: joining, leaving and approval go through the API.
+  const remote = async (task: () => Promise<void>) => {
+    setSaving(true);
+    setError('');
+    try {
+      await task();
+      setConfirm(null);
+    } catch (failure) {
+      setError(
+        failure instanceof Error ? failure.message : 'Something went wrong.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
   const leave = () => {
+    if (remoteEvents && e.revision) {
+      void remote(() => remoteEvents.leave(e));
+      return;
+    }
     update((s) => {
       const memberships = { ...s.memberships };
       delete memberships[e.id];
@@ -37,6 +56,10 @@ export function EventDetail() {
     setConfirm(null);
   };
   const join = () => {
+    if (remoteEvents && e.revision) {
+      void remote(() => remoteEvents.join(e));
+      return;
+    }
     update((s) => joinEvent(s, e.id));
     setConfirm(null);
   };
@@ -90,7 +113,8 @@ export function EventDetail() {
             role="group"
             aria-label="Participants"
           >
-            {['A', 'D', 'K', 'P']
+            {/* Sample events only: published events don't list other people. */}
+            {(remoteEvents ? [] : ['A', 'D', 'K', 'P'])
               .slice(0, Math.min(e.attendees, 4))
               .map((n) => (
                 <span key={n}>{n}</span>
@@ -107,15 +131,21 @@ export function EventDetail() {
             <>
               {membership && (
                 <p role="status" className="membership-status">
-                  {membership === 'joined'
-                    ? 'Joined on this device. No reservation has been made.'
-                    : membership === 'requested'
-                      ? 'Request saved on this device. It hasn’t been sent to a host.'
-                      : 'Added to the waiting list on this device. No place is reserved.'}
+                  {remoteEvents
+                    ? membership === 'joined'
+                      ? 'You’re confirmed. The group chat is open to you.'
+                      : membership === 'requested'
+                        ? 'Request sent. The host will confirm you, then the group chat opens.'
+                        : 'You’re on the waiting list. You’ll get a place, and the group chat, when one frees up.'
+                    : membership === 'joined'
+                      ? 'Joined on this device. No reservation has been made.'
+                      : membership === 'requested'
+                        ? 'Request saved on this device. It hasn’t been sent to a host.'
+                        : 'Added to the waiting list on this device. No place is reserved.'}
                 </p>
               )}
               <div className="feature-actions">
-                {remoteEvents && !e.mine ? (
+                {remoteEvents && !e.mine && !e.revision ? (
                   <p className="muted">Joining is not open yet.</p>
                 ) : !canWrite ? (
                   <Link
@@ -145,34 +175,41 @@ export function EventDetail() {
                 ) : membership ? (
                   <button
                     className="button button-secondary"
+                    disabled={saving}
                     onClick={() => setConfirm('leave')}
                   >
                     {membership === 'joined'
                       ? 'Leave event'
-                      : 'Withdraw request'}
+                      : membership === 'waiting'
+                        ? 'Leave waiting list'
+                        : 'Withdraw request'}
                   </button>
                 ) : (
                   <button
                     className="button button-primary"
-                    disabled={!canJoin(e)}
+                    disabled={
+                      !canJoin(e) || saving || (!!remoteEvents && e.price > 0)
+                    }
                     onClick={() =>
-                      e.price && !full && !e.approval
+                      e.price && !full && !e.approval && !remoteEvents
                         ? setConfirm('pay')
                         : join()
                     }
                   >
                     {!canJoin(e)
                       ? 'Event ended'
-                      : full
-                        ? 'Join waiting list'
-                        : e.approval
-                          ? 'Request to join'
-                          : e.price
-                            ? 'Try joining'
-                            : 'Join free event'}
+                      : remoteEvents && e.price > 0
+                        ? 'Paid events can’t be joined yet'
+                        : full && !(remoteEvents && e.approval)
+                          ? 'Join waiting list'
+                          : e.approval
+                            ? 'Request to join'
+                            : e.price
+                              ? 'Try joining'
+                              : 'Join free event'}
                   </button>
                 )}
-                {!remoteEvents && chatAllowed(state, e) && (
+                {chatAllowed(state, e) && (
                   <Link
                     className="button button-white"
                     to={`/community/events/${e.id}/chat`}
@@ -181,7 +218,7 @@ export function EventDetail() {
                   </Link>
                 )}
               </div>
-              {membership === 'requested' && (
+              {membership === 'requested' && !remoteEvents && (
                 <button
                   className="text-link"
                   onClick={() =>
@@ -223,7 +260,9 @@ export function EventDetail() {
                 {confirm === 'pay'
                   ? `${formatPrice(e.price)} is a sample price. No card details or payment are required.`
                   : confirm === 'leave'
-                    ? 'Your place and access to group chat will be removed.'
+                    ? remoteEvents && e.approval
+                      ? 'Your place and access to group chat will be removed. To come back, the host will need to confirm you again.'
+                      : 'Your place and access to group chat will be removed.'
                     : 'The event will stay in Created, marked cancelled. Joining and chat will close.'}
               </p>
               <div className="feature-actions">
@@ -278,6 +317,9 @@ export function EventDetail() {
           )}
           {error && <p role="alert">{error}</p>}
           {!remoteEvents && canWrite && e.mine && <EventManagement event={e} />}
+          {remoteEvents && e.mine && e.revision ? (
+            <remoteEvents.Manage event={e} />
+          ) : null}
         </article>
       </div>
     </div>

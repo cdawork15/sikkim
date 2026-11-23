@@ -183,13 +183,16 @@ export function registerBookings(
         ),
       }),
   );
-  app.get<{ Querystring: { after?: string; status?: string } }>(
+  app.get<{
+    Querystring: { after?: string; status?: string; experienceId?: string };
+  }>(
     '/v1/me/bookings',
     {
       schema: {
         querystring: object({
           after: uuid,
           status: { type: 'string', enum: ['upcoming', 'past', 'cancelled'] },
+          experienceId: uuid,
         }),
       },
     },
@@ -199,6 +202,7 @@ export function registerBookings(
           await client.query(
             `
         SELECT b.id,b.reference,b.quantity,b.status,b.revision,b.snapshot->>'title' AS title,
+          b.experience_id AS "experienceId",b.slot_id AS "slotId",
           b.total_paise AS "totalPaise",b.currency,s.starts_at AS "startsAt",s.ends_at AS "endsAt",s.timezone
         FROM public.bookings b JOIN public.experience_slots s ON s.id=b.slot_id
         WHERE b.user_id=$1 AND ($2::uuid IS NULL OR b.id>$2)
@@ -206,12 +210,14 @@ export function registerBookings(
             ($3='cancelled' AND b.status='cancelled') OR
             ($3='upcoming' AND b.status='confirmed' AND s.ends_at>clock_timestamp()) OR
             ($3='past' AND b.status<>'cancelled' AND s.ends_at<=clock_timestamp()))
+          AND ($4::uuid IS NULL OR b.experience_id=$4)
         ORDER BY b.id LIMIT 21
       `,
             [
               p.userId,
               request.query.after ?? null,
               request.query.status ?? null,
+              request.query.experienceId ?? null,
             ],
           )
         ).rows;

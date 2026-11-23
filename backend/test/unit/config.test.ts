@@ -43,6 +43,27 @@ test('sign-in codes need a long secret and are dev-only on the console', () => {
   );
 });
 
+test('sessions last until sign-out within bounded, configurable windows', () => {
+  const { session } = loadConfig(testEnvironment);
+  assert.deepEqual(session, {
+    idleSeconds: 30 * 86400,
+    maxSeconds: 365 * 86400,
+    cookieSecure: false,
+  });
+  assert.equal(
+    loadConfig({ ...testEnvironment, SESSION_IDLE_DAYS: '7' }).session
+      .idleSeconds,
+    7 * 86400,
+  );
+  for (const bad of [
+    { SESSION_IDLE_DAYS: '0' },
+    { SESSION_MAX_DAYS: '401' },
+    { SESSION_IDLE_DAYS: '90', SESSION_MAX_DAYS: '60' },
+    { SESSION_COOKIE_SECURE: 'yes' },
+  ])
+    assert.throws(() => loadConfig({ ...testEnvironment, ...bad }));
+});
+
 test('host verification mode is explicit', () => {
   assert.equal(
     loadConfig({ ...testEnvironment, HOST_VERIFICATION_MODE: 'manual' })

@@ -10,9 +10,9 @@ flowchart LR
     SPA["React 19 SPA<br/>(Vite build, frontend/)"]
   end
 
-  subgraph Edge["Static hosting + reverse proxy"]
+  subgraph Edge["CloudFront (HTTPS) → Caddy on the server"]
     Static["Static files<br/>index.html fallback"]
-    Proxy["/v1 → API<br/>(HTTPS, nginx or CDN rewrite)"]
+    Proxy["/v1 → API on 127.0.0.1:3000"]
   end
 
   subgraph API["Fastify API (Node 24, backend/)"]
@@ -23,7 +23,7 @@ flowchart LR
     Catalogue["catalogue<br/>experiences · search · reviews"]
     Bookings["bookings<br/>slots · holds · bookings · tickets"]
     Media["media<br/>uploads · ffmpeg · signed links · reels"]
-    Community["community<br/>events · photos"]
+    Community["community<br/>events · photos · groups · chat"]
     Admin["admin<br/>overview · curator CRM · tasks<br/>scoring · automation · forecast · users"]
     Core --> Accounts & Hosts & Catalogue & Bookings & Media & Community & Admin
   end
@@ -37,13 +37,15 @@ flowchart LR
   Claude["Claude API (optional)<br/>AI_PROVIDER=anthropic"]
 
   SPA -- "HTML/JS/CSS" --> Static
-  SPA -- "JSON over HTTPS<br/>Bearer token in memory" --> Proxy --> Core
+  SPA -- "JSON over HTTPS<br/>Bearer token in memory<br/>HttpOnly sx_session cookie (/v1/auth only)" --> Proxy --> Core
   Accounts & Hosts & Catalogue & Bookings & Community & Admin --> PG
   Media --> PG
   Media --> Disk
   Ops -- "owner role" --> PG
   Admin -. "AI brief, on request<br/>no phone/email" .-> Claude
 ```
+
+In production all of this runs on one AWS server behind CloudFront, with RDS for PostgreSQL. Every push to `main` is deployed. See [AWS deployment](../deploy/aws/README.md) for the deployment diagram and pipeline.
 
 Design rules that shape the code:
 
@@ -114,7 +116,7 @@ sequenceDiagram
   S->>P: COMMIT
   S-->>F: data
   F-->>B: 200 {data, page?} or {error}
-  Note over B: Token refreshes before expiry;<br/>sessions last 30 min, max 24 h
+  Note over B: Signed in until sign-out: 30 days idle, 365 max.<br/>Reload → POST /v1/auth/resume with the HttpOnly cookie
 ```
 
 ## Booking workflow (free bookings)
@@ -125,8 +127,14 @@ sequenceDiagram
   participant A as API
   participant H as Host
   T->>A: GET /experiences/:id/slots
+  T->>A: GET /me/bookings?status=upcoming&experienceId
+  A-->>T: dates already booked (shown on the trip page)
   T->>A: POST /me/seat-holds {slotId, quantity, requestKey}
-  A-->>T: hold (≤ 10 min, capacity reserved)
+  alt Already booked on this date
+    A-->>T: 409 ALREADY_BOOKED
+  else
+    A-->>T: hold (≤ 10 min, capacity reserved)
+  end
   T->>A: POST /me/bookings {holdId, contact, guests}
   A-->>T: booking (reference) + ticket issued
   T->>A: GET /me/bookings/:id/ticket
@@ -138,7 +146,31 @@ sequenceDiagram
   end
 ```
 
-Paid bookings are blocked (`PAYMENT_UNAVAILABLE`) until a payment gateway is added.
+Paid bookings are blocked (`PAYMENT_UNAVAILABLE`) until a payment gateway is added. A traveller gets one confirmed booking per date (`ALREADY_BOOKED`), checked under the same per-experience lock as capacity, so two tabs cannot both book the same date.
+
+## Community groups and chat
+
+```mermaid
+sequenceDiagram
+  actor M as Member
+  participant A as API
+  actor H as Host
+  M->>A: POST /community/events/:id/join
+  alt Event needs approval
+    A-->>M: requested (no chat)
+    H->>A: GET …/members, POST …/members/:userId/confirm
+    A-->>H: confirmed
+  else Free event, places left
+    A-->>M: confirmed
+  else Free event, full
+    A-->>M: waiting (moves up when a place frees)
+  end
+  loop Every few seconds while the chat is open
+    M->>A: GET …/messages?after=<last id>
+  end
+  M->>A: POST …/messages {body}
+  Note over A: Host and confirmed members only (403 CHAT_NOT_ALLOWED otherwise).<br/>Posts lock the event row so ids commit in order.
+```
 
 ## Host onboarding, verification and publishing
 
@@ -245,6 +277,9 @@ erDiagram
   experiences ||--o{ experience_media : shows
   media_assets ||--o{ experience_media : used_in
   users ||--o{ community_events : creates
+  community_events ||--o{ community_members : joined_by
+  users ||--o{ community_members : joins
+  community_events ||--o{ community_messages : chat
   crm_leads ||--o{ crm_lead_notes : logs
   crm_leads ||--o{ crm_tasks : follow_up
   crm_leads ||--o{ crm_ai_runs : briefed_by

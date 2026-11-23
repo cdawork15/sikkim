@@ -826,6 +826,82 @@ test('free bookings, capacity and tickets against isolated PostgreSQL', async (t
   );
 
   await t.test(
+    'one confirmed booking per traveller per date, listed by experience',
+    async () => {
+      const exp = await experience();
+      const first = await newSlot(exp, { capacity: 8 });
+      const later = new Date(Date.now() + 72 * 3600000);
+      const second = await newSlot(exp, {
+        capacity: 8,
+        startsAt: later.toISOString(),
+        endsAt: new Date(+later + 3600000).toISOString(),
+        bookingDeadline: new Date(+later - 3600000).toISOString(),
+      });
+      const booked = await reserve(first.id);
+      // Hold another date first, then try to reserve the booked date again.
+      const pending = await hold(second.id);
+      const again = await call('POST', '/v1/me/seat-holds', alice, {
+        slotId: first.id,
+        quantity: 1,
+        requestKey: randomUUID(),
+      });
+      assert.equal(again.statusCode, 409, again.body);
+      assert.equal(again.json().error.code, 'ALREADY_BOOKED');
+      // Two holds made before either was confirmed: only the first confirms.
+      const racing = await hold(second.id);
+      data(
+        await call('POST', '/v1/me/bookings', alice, confirmation(pending.id)),
+        201,
+      );
+      const late = await call(
+        'POST',
+        '/v1/me/bookings',
+        alice,
+        confirmation(racing.id),
+      );
+      assert.equal(late.json().error.code, 'ALREADY_BOOKED');
+      // Another traveller can still book the same date.
+      await reserve(first.id, bob);
+      // Moving onto a date you already hold is refused too.
+      const move = await call(
+        'POST',
+        `/v1/me/bookings/${booked.id}/reschedule`,
+        alice,
+        {
+          revision: booked.revision,
+          slotId: second.id,
+          requestKey: randomUUID(),
+          reason: 'Same date as my other booking',
+        },
+      );
+      assert.equal(move.json().error.code, 'ALREADY_BOOKED');
+      const mine = data(
+        await call(
+          'GET',
+          `/v1/me/bookings?status=upcoming&experienceId=${exp}`,
+          alice,
+        ),
+      );
+      assert.equal(mine.length, 2);
+      assert.ok(
+        mine.every((row: { experienceId: string }) => row.experienceId === exp),
+      );
+      assert.deepEqual(
+        mine.map((row: { slotId: string }) => row.slotId).sort(),
+        [first.id, second.id].sort(),
+      );
+      // After cancelling, the date can be booked again.
+      data(
+        await call('POST', `/v1/me/bookings/${booked.id}/cancel`, alice, {
+          revision: booked.revision,
+          reason: 'Plans changed',
+        }),
+      );
+      await reserve(first.id);
+    },
+  );
+
+  await t.test(
     'exports isolate booking data and omit ticket secrets; snapshots and events cannot be rewritten',
     async () => {
       const exported = data(await call('GET', '/v1/me/export', alice));

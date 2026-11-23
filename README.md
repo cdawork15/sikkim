@@ -2,13 +2,15 @@
 
 A mobile-first web app for discovering and booking local experiences in Sikkim: reels, trips run by local hosts, free bookings with QR tickets, Community events, and an Operations workspace with a curator CRM.
 
-| Folder                  | What it is                                | Stack                                  | Deploys as                                           |
-| ----------------------- | ----------------------------------------- | -------------------------------------- | ---------------------------------------------------- |
-| [`frontend/`](frontend) | Web app for travellers, hosts and staff   | React 19, TypeScript, Vite             | Static files (`dist/`) with an `index.html` fallback |
-| [`backend/`](backend)   | API under `/v1`                           | Node 24, Fastify 5, PostgreSQL, ffmpeg | Node service behind HTTPS, proxied at `/v1`          |
-| [`docs/`](docs)         | System architecture and workflow diagrams | Mermaid                                | —                                                    |
+| Folder                       | What it is                                | Stack                                  | Deploys as                                               |
+| ---------------------------- | ----------------------------------------- | -------------------------------------- | -------------------------------------------------------- |
+| [`frontend/`](frontend)     | Web app for travellers, hosts and staff   | React 19, TypeScript, Vite             | Static files (`dist/`) with an `index.html` fallback |
+| [`backend/`](backend)       | API under `/v1`                         | Node 24, Fastify 5, PostgreSQL, ffmpeg | Node service behind HTTPS, proxied at `/v1`            |
+| [`docs/`](docs)             | System architecture and workflow diagrams | Mermaid                                | —                                                       |
+| [`deploy/aws/`](deploy/aws) | AWS stack and server scripts              | CloudFormation, Caddy, systemd         | Deployed on every push to `main`                       |
 
 - [Architecture and workflows](docs/ARCHITECTURE.md)
+- [AWS deployment: how pushes to `main` go live](deploy/aws/README.md)
 - [Backend setup, configuration and staff access](backend/README.md) · [API guide](backend/docs/API.md)
 - [Frontend screens and configuration](frontend/README.md) · [Design rules](frontend/docs/DEMO.md) · [Prototype screens](frontend/docs/design-references/)
 
@@ -47,7 +49,7 @@ Operations → **Pipeline** holds the curator leads. Each lead has a **lead scor
 
 ## Checks
 
-Each app has its own checks, and CI runs them separately when that folder changes (`.github/workflows/`).
+Each app has its own checks (`.github/workflows/`). Pull requests run them when that folder changes. Every push to `main` runs the backend checks and the frontend build and unit tests, then **deploys to AWS** ([`deploy.yml`](.github/workflows/deploy.yml), [details](deploy/aws/README.md)).
 
 ```sh
 cd backend && npm run check && npm run test:integration

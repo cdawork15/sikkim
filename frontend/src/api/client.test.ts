@@ -105,7 +105,44 @@ describe('API sessions and requests', () => {
       }),
     ).rejects.toMatchObject({ status: 401, requestId: 'request-1' });
     expect(api.getSnapshot().user).toBeNull();
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    // The mutation is sent once; the only other call tries the saved session.
+    expect(fetcher.mock.calls.map(([path]) => String(path))).toEqual([
+      '/v1/auth/login',
+      '/v1/me',
+      '/v1/auth/resume',
+    ]);
+  });
+  it('recovers when another tab renewed the shared session, then retries once', async () => {
+    const unauthorized = () =>
+      new Response(
+        JSON.stringify({
+          error: { code: 'AUTH_REQUIRED', message: 'Sign in again.' },
+        }),
+        { status: 401 },
+      );
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async (path, init) => {
+        const url = String(path);
+        if (url.endsWith('/login')) return response(session('old'));
+        if (url.endsWith('/resume')) return response(session('renewed'));
+        const auth = (init?.headers as Record<string, string>).Authorization;
+        return auth === 'Bearer renewed' ? response(user) : unauthorized();
+      });
+    const api = client(fetcher);
+    await api.login({
+      email: 'traveller@example.com',
+      password: 'A long test passphrase',
+    });
+    await expect(api.request('/me', { private: true })).resolves.toEqual({
+      data: user,
+    });
+    expect(api.getSnapshot().user).toEqual(user);
+    const resume = fetcher.mock.calls.find(([path]) =>
+      String(path).endsWith('/resume'),
+    );
+    expect(resume?.[1]).toMatchObject({ credentials: 'same-origin' });
+    expect(resume?.[1]?.headers).not.toHaveProperty('Authorization');
   });
   it('ignores an old account response after sign-out even if transport ignores abort', async () => {
     let resolve!: (response: Response) => void;
@@ -263,6 +300,34 @@ it('registers with credentials and starts a revocable in-memory session', async 
   expect(api.getSnapshot().user).toEqual(user);
   api.forget();
   expect(api.getSnapshot().user).toBeNull();
+});
+
+it('restores the sign-in after a reload from the saved session', async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response(session()));
+  const api = client(fetcher);
+  const restoring = api.restore();
+  expect(api.getSnapshot().restoring).toBe(true);
+  await expect(restoring).resolves.toBe(true);
+  expect(api.getSnapshot()).toMatchObject({ user, restoring: false });
+  expect(fetcher.mock.calls[0]?.[0]).toBe('/v1/auth/resume');
+  expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
+    method: 'POST',
+    credentials: 'same-origin',
+  });
+});
+
+it('stays signed out when there is no saved session', async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        error: { code: 'AUTH_REQUIRED', message: 'Sign in again.' },
+      }),
+      { status: 401 },
+    ),
+  );
+  const api = client(fetcher);
+  await expect(api.restore()).resolves.toBe(false);
+  expect(api.getSnapshot()).toMatchObject({ user: null, restoring: false });
 });
 
 it('does not create a session after an unsuccessful password login', async () => {

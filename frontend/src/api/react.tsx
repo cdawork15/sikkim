@@ -18,9 +18,13 @@ export function ApiProvider({
   children: ReactNode;
   client?: ApiClient;
 }) {
-  const [instance] = useState(
-    () => client ?? new ApiClient(import.meta.env.VITE_API_BASE_URL || '/v1'),
-  );
+  const [instance] = useState(() => {
+    if (client) return client;
+    const created = new ApiClient(import.meta.env.VITE_API_BASE_URL || '/v1');
+    // Stay signed in across reloads until the person signs out.
+    void created.restore();
+    return created;
+  });
   return <Context.Provider value={instance}>{children}</Context.Provider>;
 }
 export function useApi() {

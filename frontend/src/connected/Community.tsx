@@ -3,7 +3,9 @@ import { useLocation } from 'react-router-dom';
 import type { Envelope } from '../api/types';
 import { useApi, useSession } from '../api/react';
 import { DemoContext, useDemo } from '../features/DemoState';
-import type { CommunityEvent } from '../features/community/model';
+import type { CommunityEvent, Membership } from '../features/community/model';
+import type { MyCommunityItem } from '../api/community';
+import { GroupManage } from './CommunityGroup';
 
 const base = (import.meta.env.VITE_API_BASE_URL || '/v1').replace(/\/$/, '');
 const photoUrl = (value: string) =>
@@ -19,10 +21,16 @@ export function SharedCommunity({ children }: { children: ReactNode }) {
   const { user } = useSession();
   const { pathname } = useLocation();
   const [events, setEvents] = useState<CommunityEvent[]>([]);
+  // The signed-in person's real group memberships, in the shape the shared
+  // Community screens use ('joined' means confirmed by the host).
+  const [memberships, setMemberships] = useState<Record<string, Membership>>(
+    {},
+  );
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
   const [refresh, setRefresh] = useState(0);
   const community = pathname.startsWith('/community');
+  const userId = user?.id;
   const reload = () => setRefresh((value) => value + 1);
   const adapt = (event: CommunityEvent): CommunityEvent => ({
     ...event,
@@ -45,7 +53,29 @@ export function SharedCommunity({ children }: { children: ReactNode }) {
         rows.push(...response.data);
         after = response.page?.nextCursor ?? null;
       } while (after);
+      const mine = userId
+        ? (
+            await client.request<MyCommunityItem[]>('/me/community', {
+              private: true,
+              signal: controller.signal,
+            })
+          ).data
+        : [];
       if (!controller.signal.aborted) {
+        setMemberships(
+          Object.fromEntries(
+            mine
+              .filter((item) => item.role === 'member')
+              .map((item) => [
+                item.event.id,
+                item.status === 'confirmed'
+                  ? 'joined'
+                  : item.status === 'waiting'
+                    ? 'waiting'
+                    : 'requested',
+              ]),
+          ),
+        );
         setEvents(rows);
         setError('');
         setLoaded(true);
@@ -59,7 +89,7 @@ export function SharedCommunity({ children }: { children: ReactNode }) {
       }
     });
     return () => controller.abort();
-  }, [client, community, pathname, refresh]);
+  }, [client, community, pathname, refresh, userId]);
   useEffect(() => {
     if (!community) return;
     const focus = () => {
@@ -145,6 +175,23 @@ export function SharedCommunity({ children }: { children: ReactNode }) {
       );
       replace(response.data);
     },
+    async join(event: CommunityEvent) {
+      await client.request(`/community/events/${event.id}/join`, {
+        method: 'POST',
+        private: true,
+        body: {},
+      });
+      reload();
+    },
+    async leave(event: CommunityEvent) {
+      await client.request(`/community/events/${event.id}/leave`, {
+        method: 'POST',
+        private: true,
+        body: {},
+      });
+      reload();
+    },
+    Manage: GroupManage,
   };
   if (community && !loaded)
     return (
@@ -167,6 +214,7 @@ export function SharedCommunity({ children }: { children: ReactNode }) {
         ...local,
         state: {
           ...local.state,
+          memberships,
           events: [
             ...events.map(adapt),
             ...local.state.events.filter(

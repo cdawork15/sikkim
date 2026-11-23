@@ -4,8 +4,11 @@ import { EventCard } from '../features/community/CommunityParts';
 import { interests, isUpcoming } from '../features/community/model';
 export function Community({
   stories,
+  plans,
 }: {
   stories?: import('react').ReactNode;
+  /** Signed-in app: your upcoming bookings and groups. */
+  plans?: import('react').ReactNode;
 }) {
   const { state } = useDemo();
   const [params, setParams] = useSearchParams();
@@ -47,6 +50,7 @@ export function Community({
           + Create
         </Link>
       </header>
+      {plans}
       <div className="feature-tabs" role="group" aria-label="Event filter">
         {['Live', 'Upcoming', 'Popular', 'Joined', 'Created', 'Saved'].map(
           (t) => (

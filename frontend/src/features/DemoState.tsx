@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useState,
+  type ComponentType,
   type ReactNode,
 } from 'react';
 import {
@@ -141,8 +142,10 @@ export function joinEvent(state: DemoState, id: string): DemoState {
         : 'joined';
   return { ...state, memberships: { ...state.memberships, [id]: membership } };
 }
+// Published events (with a revision) come from the API, whose count already
+// includes the signed-in person. Device-only sample events add them locally.
 export const joinedCount = (s: DemoState, e: CommunityEvent) =>
-  e.attendees + (s.memberships[e.id] === 'joined' ? 1 : 0);
+  e.attendees + (!e.revision && s.memberships[e.id] === 'joined' ? 1 : 0);
 export const chatAllowed = (s: DemoState, e: CommunityEvent) =>
   e.status !== 'cancelled' && (e.mine || s.memberships[e.id] === 'joined');
 function load(storageKey: string) {
@@ -172,6 +175,10 @@ export const DemoContext = createContext<{
   remoteEvents?: {
     save: (event: CommunityEvent, existing: boolean) => Promise<CommunityEvent>;
     cancel: (event: CommunityEvent) => Promise<void>;
+    join: (event: CommunityEvent) => Promise<void>;
+    leave: (event: CommunityEvent) => Promise<void>;
+    // Host tools for a published event (member requests, confirmations).
+    Manage: ComponentType<{ event: CommunityEvent }>;
   };
 } | null>(null);
 export function DemoProvider({

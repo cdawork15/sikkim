@@ -1,5 +1,7 @@
 # Team demo
 
+> The current deployment is on AWS (Sydney) and updates on every push to `main`: see [deploy/aws/README.md](../../deploy/aws/README.md). This page describes the earlier, manually deployed team demo in another AWS account.
+
 - Frontend: https://sikkim-experiences.dpcu7r1z2ixs4.amplifyapp.com
 - Original URL / backend: https://15.252.155.73
 - AWS Lightsail: `sikkim-demo`, Mumbai (`ap-south-1`), 2 GB, $12/month before tax and snapshots.

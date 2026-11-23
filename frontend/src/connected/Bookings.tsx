@@ -18,6 +18,7 @@ import {
   SlotPicker,
   SlotTime,
   useBookingClock,
+  useUpcomingBookings,
 } from './bookingShared';
 
 export function MyBookings() {
@@ -394,6 +395,9 @@ function BookingChange({
   }, []);
   const [selected, setSelected] = useState<BookingSlot>();
   const [uncertain, setUncertain] = useState(false);
+  const otherDates = useUpcomingBookings(
+    mode === 'move' ? booking.experienceId : undefined,
+  ).filter((item) => item.id !== booking.id);
   const attempt = useRef<
     | { revision: number; reason: string; slotId?: string; requestKey?: string }
     | undefined
@@ -463,6 +467,7 @@ function BookingChange({
               selected={selected}
               onSelect={setSelected}
               excludeId={booking.slot.id}
+              bookedSlotIds={otherDates.map((item) => item.slotId)}
               policy={booking.snapshot.policy}
               disabled={action.busy || uncertain}
             />

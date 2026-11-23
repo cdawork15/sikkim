@@ -10,53 +10,19 @@ import {
   details,
   eventProperties,
   eventSchema,
+  invalid,
   unavailable,
   type EventInput,
 } from './model.js';
 import { preparePhotos } from './photos.js';
+import { publicEvent, read, select, type EventRow } from './events.js';
+import {
+  confirmedCount,
+  promoteWaiting,
+  registerCommunityGroups,
+} from './groups.js';
 
 const params = object({ id: uuid }, ['id']);
-const select = `SELECT e.id, e.owner_id AS "ownerId", e.details, e.status,
-  e.revision, u.display_name AS host,
-  ARRAY(SELECT '/v1/community/photos/' || p.id FROM public.community_photos p
-        WHERE p.event_id=e.id ORDER BY p.position) AS images
-  FROM public.community_events e JOIN public.users u ON u.id=e.owner_id`;
-type EventRow = {
-  id: string;
-  ownerId: string;
-  details: Omit<EventInput, 'images'>;
-  status: string;
-  revision: number;
-  host: string;
-  images: string[];
-};
-function publicEvent(row: EventRow) {
-  const start = Date.parse(`${row.details.date}T${row.details.start}:00+05:30`);
-  const end = Date.parse(`${row.details.date}T${row.details.end}:00+05:30`);
-  return {
-    ...row.details,
-    id: row.id,
-    ownerId: row.ownerId,
-    host: row.host,
-    status: row.status,
-    revision: row.revision,
-    images: row.images,
-    image: row.images[0] ?? '/images/himalayan-dawn.webp',
-    attendees: 0,
-    mine: false,
-    live: row.status === 'published' && start <= Date.now() && end > Date.now(),
-  };
-}
-async function read(client: PoolClient, id: string) {
-  const row = (
-    await client.query<EventRow>(
-      `${select} WHERE e.id=$1 AND u.status='active'`,
-      [id],
-    )
-  ).rows[0];
-  if (!row) throw unavailable();
-  return publicEvent(row);
-}
 async function owned(
   client: PoolClient,
   id: string,
@@ -83,6 +49,7 @@ export function registerCommunity(
   config: Config,
 ) {
   const authenticated = accountAccess(database, config);
+  registerCommunityGroups(app, database, config);
   app.get<{ Querystring: { after?: string } }>(
     '/v1/community/events',
     {
@@ -151,7 +118,13 @@ export function registerCommunity(
     });
     const photos = await preparePhotos(input.images);
     return authenticated(token, async (client, actor) => {
-      if (id) await owned(client, id, actor.userId, expected);
+      if (id) {
+        await owned(client, id, actor.userId, expected);
+        if (value.capacity < (await confirmedCount(client, id)))
+          throw invalid(
+            'Keep enough places for the people you have already confirmed.',
+          );
+      }
       const existing = id
         ? (
             await client.query<{ id: string; content: Buffer }>(
@@ -191,6 +164,12 @@ export function registerCommunity(
           [photo.id, eventId, position, photo.content],
         );
       }
+      // More places may let people on the waiting list in.
+      await promoteWaiting(client, {
+        id: eventId,
+        details: value,
+        status: 'published',
+      });
       return read(client, eventId);
     });
   }

@@ -30,7 +30,7 @@ import { TravelEssentials } from '../pages/TravelEssentials';
 import { EssentialsDetail } from '../pages/EssentialsDetail';
 import { EventDetail } from '../features/community/EventDetail';
 import { EventForm, EventCreated } from '../features/community/EventForm';
-import { Chat } from '../features/community/Chat';
+import { GroupChat, UpcomingPlans } from './CommunityGroup';
 import { Story } from '../features/community/Story';
 import '../features/features.css';
 import './connected.css';
@@ -259,7 +259,12 @@ export function ConnectedApp() {
             <Route path="community/host-stories/:id" element={<HostStory />} />
             <Route
               path="community"
-              element={<Community stories={<CommunityStories />} />}
+              element={
+                <Community
+                  stories={<CommunityStories />}
+                  plans={<UpcomingPlans />}
+                />
+              }
             />
             <Route
               path="community/create"
@@ -290,7 +295,7 @@ export function ConnectedApp() {
               path="community/events/:id/chat"
               element={
                 <CommunityAccount>
-                  <Chat />
+                  <GroupChat />
                 </CommunityAccount>
               }
             />

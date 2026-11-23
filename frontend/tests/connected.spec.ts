@@ -704,7 +704,9 @@ test('Community retains its design while using shared events and authenticated c
   );
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.goto('/community/events/community-5');
-  await expect(page.getByText('Joining is not open yet.')).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Sign in to join', exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'Edit event', exact: true }),
   ).toHaveCount(0);
@@ -1277,12 +1279,25 @@ test('password login rejects an external return destination', async ({
 }) => {
   await fixture(page);
   await page.goto('/welcome?next=https%3A%2F%2Fexample.com');
-  await page.getByLabel('Email', { exact: true }).fill('pema@example.com');
+  await page.getByLabel('Email or mobile number').fill('pema@example.com');
   await page
     .getByLabel('Password', { exact: true })
     .fill('A long mountain passphrase');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page).toHaveURL(/\/account$/);
+  await expect(page).toHaveURL(/127\.0\.0\.1:\d+\/$/);
+});
+
+test('signing in without a return page lands on the home page', async ({
+  page,
+}) => {
+  await fixture(page);
+  await page.goto('/welcome');
+  await page.getByLabel('Email or mobile number').fill('pema@example.com');
+  await page
+    .getByLabel('Password', { exact: true })
+    .fill('A long mountain passphrase');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).toHaveURL(/127\.0\.0\.1:\d+\/$/);
 });
 
 test('local experience details remove fixture clutter without inventing confirmed arrangements', async ({

@@ -143,6 +143,26 @@ export async function requireCapacity(
   }
 }
 
+// One confirmed booking per traveller per date. Callers hold the experience
+// lock, so two tabs cannot both pass this check.
+export async function requireNotBooked(
+  client: PoolClient,
+  userId: string,
+  slotId: string,
+  exceptBookingId: string | null = null,
+) {
+  const existing = await client.query(
+    `SELECT 1 FROM public.bookings WHERE user_id=$1 AND slot_id=$2
+      AND status='confirmed' AND ($3::uuid IS NULL OR id<>$3) LIMIT 1`,
+    [userId, slotId, exceptBookingId],
+  );
+  if (existing.rowCount)
+    throw conflict(
+      'You already have a booking on this date. Open it from your bookings to see your ticket.',
+      'ALREADY_BOOKED',
+    );
+}
+
 export function publicSlot(selected: Slot, available: number) {
   return {
     id: selected.id,

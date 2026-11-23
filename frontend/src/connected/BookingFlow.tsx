@@ -10,8 +10,10 @@ import {
   BookingHeading,
   BookingPage,
   SlotPicker,
+  AlreadyBooked,
   SlotTime,
   useBookingClock,
+  useUpcomingBookings,
 } from './bookingShared';
 
 export function BookingFlow() {
@@ -45,6 +47,7 @@ function Reservation({ experience }: { experience: ExperienceDetail }) {
   const action = useAction();
   const navigate = useNavigate();
   const now = useBookingClock();
+  const booked = useUpcomingBookings(experience.id);
   const [selected, setSelected] = useState<BookingSlot>();
   const [quantity, setQuantity] = useState(experience.minParticipants);
   const [held, setHeld] = useState<SeatHold>();
@@ -129,6 +132,9 @@ function Reservation({ experience }: { experience: ExperienceDetail }) {
         <ErrorNotice error={action.error} />
         {!held ? (
           <>
+            <AlreadyBooked bookings={booked}>
+              <p>You can still book a different date below.</p>
+            </AlreadyBooked>
             <div className="booking-group">
               <div>
                 <h2>Who’s coming?</h2>
@@ -159,6 +165,7 @@ function Reservation({ experience }: { experience: ExperienceDetail }) {
               quantity={quantity}
               selected={selected}
               onSelect={setSelected}
+              bookedSlotIds={booked.map((item) => item.slotId)}
               disabled={
                 action.busy ||
                 holdLocked ||

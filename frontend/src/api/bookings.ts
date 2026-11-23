@@ -25,6 +25,8 @@ export type SeatHold = {
 export type BookingSummary = {
   id: string;
   reference: string;
+  experienceId: string;
+  slotId: string;
   title: string;
   quantity: number;
   status: 'confirmed' | 'cancelled' | 'no_show';
@@ -37,7 +39,7 @@ export type BookingSummary = {
 };
 export type Booking = Omit<
   BookingSummary,
-  'title' | 'startsAt' | 'endsAt' | 'timezone'
+  'title' | 'startsAt' | 'endsAt' | 'timezone' | 'slotId'
 > & {
   experienceId: string;
   contactName: string;

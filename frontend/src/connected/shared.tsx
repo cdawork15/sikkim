@@ -41,12 +41,19 @@ export function Empty({ children }: { children: ReactNode }) {
 export const isStaff = (roles: string[] = []) =>
   roles.includes('admin') || roles.includes('super');
 export const isSuper = (roles: string[] = []) => roles.includes('super');
-/** Staff land in Operations after signing in, unless a page asked for them. */
+/**
+ * Where to go after signing in: the page that asked for sign-in (for example
+ * a booking), otherwise the home page. Only same-site paths are accepted.
+ */
+export const signInDestination = (next: string | null) =>
+  next && /^\/(?![\/\\])/.test(next) && !next.startsWith('/welcome')
+    ? next
+    : '/';
+/** Everyone, staff included, lands where sign-in was asked for (default: home). */
 export const landingFor = (
-  account: { roles: string[] },
+  _account: { roles: string[] },
   destination: string,
-) =>
-  destination === '/account' && isStaff(account.roles) ? '/admin' : destination;
+) => destination;
 
 export function RequireAccount({
   children,
@@ -59,8 +66,9 @@ export function RequireAccount({
   /** Super admins only. */
   superOnly?: boolean;
 }) {
-  const { user } = useSession();
+  const { user, restoring } = useSession();
   const location = useLocation();
+  if (!user && restoring) return <Loading />;
   if (!user)
     return (
       <section className="account-gate" aria-label="Sign in required">
@@ -164,8 +172,15 @@ export function experienceSummary(experience: Experience) {
 export function isPreviewHost(story: string) {
   return story.startsWith('Fictional host for local design preview only.');
 }
+// Concept images are AI placeholders with unconfirmed rights (docs/DEMO.md).
+// They only ever decorate `preview-` sample experiences, and only when
+// VITE_PREVIEW_IMAGES allows it: on in `npm run dev` by default, off in builds
+// unless a test deployment opts in. Never enable it for production.
+const previewImagesEnabled =
+  (import.meta.env.VITE_PREVIEW_IMAGES ??
+    (import.meta.env.DEV ? 'true' : 'false')) === 'true';
 export function previewImage(experience?: Experience) {
-  if (!import.meta.env.DEV || !experience?.slug.startsWith('preview-'))
+  if (!previewImagesEnabled || !experience?.slug.startsWith('preview-'))
     return undefined;
   if (experience.categories.includes('food')) return '/images/momos.webp';
   if (

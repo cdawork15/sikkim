@@ -4,23 +4,23 @@ Node 24 · TypeScript · Fastify 5 · PostgreSQL. The API behind the [Sikkim Exp
 
 - [Architecture and workflow diagrams](../docs/ARCHITECTURE.md)
 - [API guide](docs/API.md)
-- [Current team demo server](docs/DEPLOYMENT.md)
+- [Production deployment (AWS, every push to `main`)](../deploy/aws/README.md) · [earlier team demo server](docs/DEPLOYMENT.md)
 
 ## What works
 
-| Area          | Status                                                                                                                                                                                                      |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Accounts      | One-time code (OTP) sign-in and sign-up by phone or email (email + password still works), 30-minute sessions refreshed up to 24 h, privacy export and deletion request                                      |
-| Discovery     | Catalogue, filters, search, reviews, saves and likes                                                                                                                                                        |
-| Bookings      | Free bookings: slots, 10-minute seat holds, bookings, QR tickets, host check-in, cancel and reschedule                                                                                                      |
-| Hosts         | Profiles; real hosts approved after a manual identity check (`HOST_VERIFICATION_MODE=manual`)                                                                                                               |
-| Media         | Uploads checked and converted with ffmpeg, rights metadata, admin review, signed links                                                                                                                      |
-| Community     | Events and event photos                                                                                                                                                                                     |
-| Account types | **User** (every account), **admin** (trips, reviews, curator pipeline, bookings), **super** (everything, plus people and account analytics)                                                                 |
-| Reels         | Anyone signed in can share a reel; an admin approves it before it shows in Explore                                                                                                                          |
-| Admin         | Operations overview, curator CRM pipeline with notes, people directory and suspension, booking lookup, operator command for staff access                                                                    |
-| CRM           | Lead score (six-criteria assessment + progress + readiness + activity), follow-up tasks, stage playbook and lead routing, pipeline/team/revenue report, CSV and calendar export, optional AI brief (Claude) |
-| Not yet       | Real email/SMS delivery for codes (locally they are printed to the API log), paid checkout, Community chat and joining, object storage for media                                                            |
+| Area          | Status                                                                                                                                                                                                                                     |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Accounts      | One-time code (OTP) sign-in and sign-up by phone or email (email + password still works), sessions that last until sign-out (30 days idle, 365 days max; restored after reload by an HttpOnly cookie), privacy export and deletion request |
+| Discovery     | Catalogue, filters, search, reviews, saves and likes                                                                                                                                                                                       |
+| Bookings      | Free bookings: slots, 10-minute seat holds, bookings, QR tickets, host check-in, cancel and reschedule                                                                                                                                     |
+| Hosts         | Profiles; real hosts approved after a manual identity check (`HOST_VERIFICATION_MODE=manual`)                                                                                                                                              |
+| Media         | Uploads checked and converted with ffmpeg, rights metadata, admin review, signed links                                                                                                                                                     |
+| Community     | Events and event photos, joining with host confirmation, members-only group chat                                                                                                                                                           |
+| Account types | **User** (every account), **admin** (trips, reviews, curator pipeline, bookings), **super** (everything, plus people and account analytics)                                                                                                |
+| Reels         | Anyone signed in can share a reel; an admin approves it before it shows in Explore                                                                                                                                                         |
+| Admin         | Operations overview, curator CRM pipeline with notes, people directory and suspension, booking lookup, operator command for staff access                                                                                                   |
+| CRM           | Lead score (six-criteria assessment + progress + readiness + activity), follow-up tasks, stage playbook and lead routing, pipeline/team/revenue report, CSV and calendar export, optional AI brief (Claude)                                |
+| Not yet       | Real email/SMS delivery for codes (locally they are printed to the API log), paid checkout, live (push) chat delivery and calls, object storage for media                                                                                  |
 
 ## Requirements
 
@@ -96,6 +96,8 @@ All settings come from the environment (`.env` locally, a private env file on se
 | `DB_TLS`, `DB_CA_FILE`                                                             | production         | Verified TLS to PostgreSQL (`DB_TLS=true` required in production)                                         |
 | `TRUST_PROXY_CIDRS`                                                                | behind a proxy     | Exact proxy IPs/CIDRs whose forwarded headers are trusted                                                 |
 | `REQUESTS_PER_MINUTE`                                                              | no                 | General rate limit per IP (default 100); login and upload limits are stricter                             |
+| `SESSION_IDLE_DAYS`, `SESSION_MAX_DAYS`                                            | no                 | Sign-in lasts until sign-out, ending after this many days unused (default 30) or in total (default 365)   |
+| `SESSION_COOKIE_SECURE`                                                            | no                 | `Secure` flag on the session cookie; default `true` in production (required), `false` otherwise           |
 | `HOST_VERIFICATION_MODE`                                                           | no                 | `disabled` (default) or `manual` to let admins approve real hosts                                         |
 | `MEDIA_STORAGE_MODE`                                                               | no                 | `local` (default) or `single_server` for one production server                                            |
 | `MEDIA_STORAGE_DIR`, `MEDIA_SIGNING_KEY`                                           | for media          | Private absolute directory and a 32+ character signing key                                                |
@@ -133,7 +135,7 @@ src/
   catalogue/        Experiences, search, reviews, admin publishing
   bookings/         Slots, holds, bookings, tickets, check-in
   media/            Uploads, processing, delivery, reels and stories
-  community/        Events and photos
+  community/        Events, photos, groups and group chat
   admin/            Overview metrics, curator CRM, users, booking lookup
   db/               Pool, migrations runner, audit helper, local seeds
   bin/              CLI entry points (database, media preview, admin)
@@ -143,6 +145,12 @@ test/integration/   Tests against the disposable sikkim_test database
 ```
 
 ## Changelog
+
+- **2026-11-23** Community groups. Joining is real: approval events take requests that the host confirms or declines; other free events confirm people while places remain and keep a waiting list that moves up automatically. **Group chat** per event, stored in PostgreSQL, open only to the host and confirmed members (`403 CHAT_NOT_ALLOWED` for everyone else); clients poll with `?after=`. `GET /v1/me/community` lists what you host or joined. Event `attendees` is now the real confirmed count. Migration `1770000013000_community-groups`.
+
+- **2026-11-23** No duplicate bookings: one confirmed booking per traveller per date. Seat holds, confirmations and reschedules onto a date you already booked return `409 ALREADY_BOOKED`. `GET /v1/me/bookings` takes `experienceId` and returns `experienceId` and `slotId`. No migration.
+
+- **2026-11-23** People stay signed in until they sign out. Sessions last 30 days from last use, up to 365 days (`SESSION_IDLE_DAYS`, `SESSION_MAX_DAYS`). Sign-in, refresh and resume set an HttpOnly `sx_session` cookie scoped to `/v1/auth`; new `POST /v1/auth/resume` restores a reloaded page from it; sign-out clears it (`SESSION_COOKIE_SECURE`). No migration.
 
 - **2026-11-21** CRM intelligence. **Lead score** 0–100 with named factors (six-criteria assessment from the proposal: uniqueness, local story, host readiness, access, safety, photo appeal; stage; readiness checklist; recent activity; verdict) and hot/warm/cold bands. **Tasks** per lead (`/v1/admin/leads/:id/tasks`, `/v1/admin/tasks`) with an iCalendar export. **Workflow automation:** new leads routed to the district owner or the least-loaded staff member, a follow-up task for every stage, a signed agreement moves the lead to Agreed. **Reporting and forecasting** (`/v1/admin/crm/report`, super): pipeline health, time in stage, team performance, booking value history, run rate, stage-weighted pipeline and a three-month projection. **CSV export** of all leads. **AI brief** (`/v1/admin/leads/:id/ai-brief`, off unless `AI_PROVIDER=anthropic`): summary, next step, risks, a WhatsApp-ready follow-up and suggested ratings, logged in `crm_ai_runs` with token counts and capped per person per hour. Migration `1770000012000_crm-intelligence`; new dependency `@anthropic-ai/sdk`.
 

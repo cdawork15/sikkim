@@ -26,16 +26,46 @@ type RequestOptions = {
   signal?: AbortSignal;
   responseType?: 'blob';
 };
-type Snapshot = { user: Account | null; generation: number; notice: string };
+type Snapshot = {
+  user: Account | null;
+  generation: number;
+  notice: string;
+  /** True while a reload is restoring the saved sign-in. */
+  restoring: boolean;
+};
+
+/** Longest wait between renewals while a page stays open. */
+const renewEvery = 30 * 60000;
+
+/**
+ * Session renewals rotate the token stored in the browser's HttpOnly cookie,
+ * so tabs take turns: otherwise two tabs could send the same old token at once.
+ */
+function oneTabAtATime<T>(task: () => Promise<T>): Promise<T> {
+  const locks = (globalThis.navigator as Navigator | undefined)?.locks;
+  return locks
+    ? (locks.request('sikkim-session', task) as unknown as Promise<T>)
+    : task();
+}
+
+const validSession = (value: Partial<Session> | undefined) =>
+  typeof value?.accessToken === 'string' &&
+  Number.isFinite(Date.parse(String(value.expiresAt)));
 
 export class ApiClient {
   private token: string | null = null;
   private expires = 0;
   private refreshTask: Promise<void> | null = null;
+  private resumeTask: Promise<boolean> | null = null;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private pending = new Set<AbortController>();
   private listeners = new Set<() => void>();
-  private snapshot: Snapshot = { user: null, generation: 0, notice: '' };
+  private snapshot: Snapshot = {
+    user: null,
+    generation: 0,
+    notice: '',
+    restoring: false,
+  };
 
   constructor(
     private base = '/v1',
@@ -67,7 +97,57 @@ export class ApiClient {
     this.refreshTask = null;
     this.pending.forEach((controller) => controller.abort());
     this.pending.clear();
-    this.emit({ user: null, generation: this.snapshot.generation + 1, notice });
+    this.emit({
+      user: null,
+      generation: this.snapshot.generation + 1,
+      notice,
+      restoring: false,
+    });
+  }
+
+  /**
+   * Restores the sign-in after a page reload from the HttpOnly session cookie.
+   * Resolves false (and stays signed out) when there is no saved session.
+   */
+  restore() {
+    if (this.snapshot.user) return Promise.resolve(true);
+    const generation = this.snapshot.generation;
+    this.emit({ ...this.snapshot, restoring: true });
+    return this.resume(generation).finally(() => {
+      if (this.snapshot.restoring)
+        this.emit({ ...this.snapshot, restoring: false });
+    });
+  }
+
+  /** Swaps the saved cookie session for a fresh token; shared by all callers. */
+  private resume(generation: number): Promise<boolean> {
+    if (this.resumeTask) return this.resumeTask;
+    const task = oneTabAtATime(() =>
+      this.raw<Session>('/auth/resume', { method: 'POST' }),
+    )
+      .then(({ data }) => {
+        if (generation !== this.snapshot.generation) return false;
+        if (!validSession(data) || typeof data.user?.id !== 'string')
+          return false;
+        if (this.snapshot.user && this.snapshot.user.id !== data.user.id)
+          return false;
+        this.token = data.accessToken;
+        this.expires = Date.parse(data.expiresAt);
+        this.emit({
+          user: data.user,
+          generation,
+          notice: '',
+          restoring: false,
+        });
+        this.scheduleRefresh();
+        return true;
+      })
+      .catch(() => false)
+      .finally(() => {
+        if (this.resumeTask === task) this.resumeTask = null;
+      });
+    this.resumeTask = task;
+    return task;
   }
 
   updateUser(user: Account) {
@@ -79,13 +159,13 @@ export class ApiClient {
     clearTimeout(this.timer);
     this.timer = setTimeout(
       () => {
-        void this.ensureFresh().catch(() => {
+        void this.ensureFresh(true).catch(() => {
           if (this.token && Date.now() < this.expires) {
             this.timer = setTimeout(() => this.scheduleRefresh(), 30000);
           }
         });
       },
-      Math.max(1000, this.expires - Date.now() - 60000),
+      Math.min(renewEvery, Math.max(1000, this.expires - Date.now() - 60000)),
     );
   }
 
@@ -157,15 +237,17 @@ export class ApiClient {
     inspect?.(session);
     this.token = session.accessToken;
     this.expires = Date.parse(session.expiresAt);
-    this.emit({ user: session.user, generation, notice: '' });
+    this.emit({ user: session.user, generation, notice: '', restoring: false });
     this.scheduleRefresh();
     return session.user;
   }
 
-  private async ensureFresh() {
+  /** Renews a token that is about to expire; `renew` forces it (timer). */
+  private async ensureFresh(renew = false) {
     if (!this.token)
       throw new ApiError(401, 'AUTH_REQUIRED', 'Sign in to continue.');
     if (Date.now() >= this.expires) {
+      if (await this.resume(this.snapshot.generation)) return;
       this.forget('Your session expired. Please sign in again.');
       throw new ApiError(
         401,
@@ -173,22 +255,22 @@ export class ApiClient {
         'Your session expired. Please sign in again.',
       );
     }
-    if (this.expires - Date.now() > 60000 && !this.refreshTask) return;
+    if (!renew && this.expires - Date.now() > 60000 && !this.refreshTask)
+      return;
     if (this.refreshTask) return this.refreshTask;
     const token = this.token;
     const generation = this.snapshot.generation;
-    const task = this.raw<Omit<Session, 'user'>>(
-      '/auth/refresh',
-      { method: 'POST', private: true },
-      token,
+    const task = oneTabAtATime(() =>
+      this.raw<Omit<Session, 'user'>>(
+        '/auth/refresh',
+        { method: 'POST', private: true },
+        token,
+      ),
     )
       .then(({ data }) => {
         if (generation !== this.snapshot.generation || this.token !== token)
           return;
-        if (
-          typeof data.accessToken !== 'string' ||
-          !Number.isFinite(Date.parse(data.expiresAt))
-        ) {
+        if (!validSession(data)) {
           this.forget('Please sign in again.');
           throw new ApiError(
             0,
@@ -200,12 +282,14 @@ export class ApiClient {
         this.expires = Date.parse(data.expiresAt);
         this.scheduleRefresh();
       })
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
         if (
           error instanceof ApiError &&
           error.status === 401 &&
           generation === this.snapshot.generation
         ) {
+          // Another tab may have renewed the shared session first.
+          if (await this.resume(generation)) return;
           this.forget('Your session ended. Please sign in again.');
         }
         throw error;
@@ -255,7 +339,26 @@ export class ApiClient {
             throw retryError;
           }
         }
-        this.forget('Your session ended. Please sign in again.');
+        // A 401 means the request was refused before it ran, so after another
+        // tab renewed the shared session it is safe to send it once more.
+        if ((await this.resume(generation)) && this.token) {
+          try {
+            const result = await this.raw<T>(path, options, this.token);
+            if (generation !== this.snapshot.generation)
+              throw new DOMException('Session changed', 'AbortError');
+            return result;
+          } catch (retryError) {
+            if (
+              retryError instanceof ApiError &&
+              retryError.status === 401 &&
+              generation === this.snapshot.generation
+            )
+              this.forget('Your session ended. Please sign in again.');
+            throw retryError;
+          }
+        }
+        if (generation === this.snapshot.generation)
+          this.forget('Your session ended. Please sign in again.');
       }
       throw error;
     }
@@ -319,7 +422,8 @@ export class ApiClient {
                   : JSON.stringify(options.body),
             }
           : {}),
-        credentials: 'omit',
+        // Only sign-in endpoints use the HttpOnly session cookie.
+        credentials: path.startsWith('/auth/') ? 'same-origin' : 'omit',
         redirect: 'error',
         cache: 'no-store',
         signal: controller.signal,
